@@ -23,48 +23,57 @@
     </header>
 
     <main class="layout">
-      <section id="top-group-card" class="card">
-        <h2>最上位グループ追加</h2>
-        <form id="top-form" class="row-form">
-          <input id="top-name" type="text" placeholder="例: 事業A" required />
-          <button type="submit">追加</button>
-        </form>
+      <section class="card add-sections-card">
+        <div class="add-sections-head">
+          <h2>グループ・タスク追加</h2>
+          <button id="add-sections-toggle" type="button" class="manual-toggle-btn">開く</button>
+        </div>
       </section>
 
-      <section id="large-group-card" class="card">
-        <h2>大グループ追加</h2>
-        <form id="large-form" class="row-form">
-          <div id="large-top-select" class="drag-dropdown"></div>
-          <input id="large-name" type="text" placeholder="例: 開発" required />
-          <button type="submit">追加</button>
-        </form>
-      </section>
+      <div id="add-sections-panel">
+        <section id="top-group-card" class="card">
+          <h2>最上位グループ追加</h2>
+          <form id="top-form" class="row-form">
+            <input id="top-name" type="text" placeholder="例: 事業A" required />
+            <button type="submit">追加</button>
+          </form>
+        </section>
 
-      <section id="mid-group-card" class="card">
-        <h2>中グループ追加</h2>
-        <form id="mid-form" class="row-form">
-          <div id="mid-large-select" class="drag-dropdown"></div>
-          <input id="mid-name" type="text" placeholder="例: フロントエンド" required />
-          <button type="submit">追加</button>
-        </form>
-      </section>
+        <section id="large-group-card" class="card">
+          <h2>大グループ追加</h2>
+          <form id="large-form" class="row-form">
+            <div id="large-top-select" class="drag-dropdown"></div>
+            <input id="large-name" type="text" placeholder="例: 開発" required />
+            <button type="submit">追加</button>
+          </form>
+        </section>
 
-      <section id="task-add-card" class="card">
-        <h2>タスク追加</h2>
-        <form id="task-form" class="row-form stack-on-mobile">
-          <div id="task-mid-select" class="drag-dropdown wide"></div>
-          <input id="task-name" type="text" placeholder="例: ログイン画面作成" required />
-          <select id="task-status">
-            <option value="未着手">未着手</option>
-            <option value="着手">着手</option>
-            <option value="チェック中">チェック中</option>
-            <option value="完了">完了</option>
-            <option value="取り下げ">取り下げ</option>
-          </select>
-          <input id="task-tags" type="text" placeholder="タグ(任意): bugfix, urgent" />
-          <button type="submit">追加</button>
-        </form>
-      </section>
+        <section id="mid-group-card" class="card">
+          <h2>中グループ追加</h2>
+          <form id="mid-form" class="row-form">
+            <div id="mid-large-select" class="drag-dropdown"></div>
+            <input id="mid-name" type="text" placeholder="例: フロントエンド" required />
+            <button type="submit">追加</button>
+          </form>
+        </section>
+
+        <section id="task-add-card" class="card">
+          <h2>タスク追加</h2>
+          <form id="task-form" class="row-form stack-on-mobile">
+            <div id="task-mid-select" class="drag-dropdown wide"></div>
+            <input id="task-name" type="text" placeholder="例: ログイン画面作成" required />
+            <select id="task-status">
+              <option value="未着手">未着手</option>
+              <option value="着手">着手</option>
+              <option value="チェック中">チェック中</option>
+              <option value="完了">完了</option>
+              <option value="取り下げ">取り下げ</option>
+            </select>
+            <input id="task-tags" type="text" placeholder="タグ(任意): bugfix, urgent" />
+            <button type="submit">追加</button>
+          </form>
+        </section>
+      </div>
 
       <section id="task-list-card" class="card">
         <h2>タスク一覧</h2>

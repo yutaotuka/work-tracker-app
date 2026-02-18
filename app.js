@@ -30,6 +30,8 @@ const el = {
   timelineMeta: document.getElementById("timeline-meta"),
   timelineHoverDetail: document.getElementById("timeline-hover-detail"),
   timelineList: document.getElementById("timeline-list"),
+  addSectionsToggle: document.getElementById("add-sections-toggle"),
+  addSectionsPanel: document.getElementById("add-sections-panel"),
   topForm: document.getElementById("top-form"),
   topName: document.getElementById("top-name"),
   largeForm: document.getElementById("large-form"),
@@ -128,6 +130,10 @@ function bindEvents() {
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
     state.timelineView = normalizeTimelineView(btn.dataset.view);
+    persistAndRender();
+  });
+  el.addSectionsToggle.addEventListener("click", () => {
+    state.addSectionsCollapsed = !state.addSectionsCollapsed;
     persistAndRender();
   });
   document.addEventListener("keydown", (e) => {
@@ -287,6 +293,7 @@ function bindEvents() {
 }
 
 function renderAll() {
+  renderAddSections();
   renderGroupSelectors();
   renderManualSection();
   renderManualTaskOptions();
@@ -297,6 +304,13 @@ function renderAll() {
   renderActiveStatus();
   renderSummary();
   renderSummaryTabs();
+}
+
+function renderAddSections() {
+  const collapsed = Boolean(state.addSectionsCollapsed);
+  el.addSectionsPanel.classList.toggle("collapsed", collapsed);
+  el.addSectionsToggle.textContent = collapsed ? "開く" : "閉じる";
+  el.addSectionsToggle.setAttribute("aria-expanded", String(!collapsed));
 }
 
 function renderGroupSelectors() {
@@ -847,6 +861,7 @@ function replaceState(next) {
   state.todayTaskDateKey = next.todayTaskDateKey;
   state.manualCollapsed = next.manualCollapsed;
   state.timelineView = next.timelineView;
+  state.addSectionsCollapsed = next.addSectionsCollapsed;
 }
 
 async function cloudSave() {
@@ -1104,7 +1119,9 @@ function getFilteredTasks() {
   const selectedLarge = state.taskLargeFilterValue || "all";
   const selectedMid = state.taskMidFilterValue || "all";
   const todayOnly = state.taskTodayFilterValue === "today";
+  const activeTaskId = state.activeSession ? state.activeSession.taskId : "";
   return state.tasks.filter((task) => {
+    if (task.id === activeTaskId) return true;
     if (!visibleStatuses.has(normalizeStatus(task.status))) return false;
     if (todayOnly && !task.isTodayTask) return false;
     if (selectedLarge !== "all" && getTaskLargeFilterKey(task) !== selectedLarge) return false;
@@ -1663,6 +1680,8 @@ function migrateState(parsed) {
         : getTodayKey(),
     manualCollapsed: typeof parsed.manualCollapsed === "boolean" ? parsed.manualCollapsed : true,
     timelineView: normalizeTimelineView(parsed.timelineView),
+    addSectionsCollapsed:
+      typeof parsed.addSectionsCollapsed === "boolean" ? parsed.addSectionsCollapsed : false,
   };
   next.tasks = Array.isArray(parsed.tasks)
     ? parsed.tasks.map((task) =>
@@ -1719,6 +1738,7 @@ function initialState() {
     todayTaskDateKey: getTodayKey(),
     manualCollapsed: true,
     timelineView: "calendar",
+    addSectionsCollapsed: false,
   };
 }
 
