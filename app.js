@@ -5,6 +5,7 @@ const CLOUD_ENDPOINT_DEFAULT =
   "https://script.google.com/macros/s/AKfycbxJZtFGoBFuRPcW-EdD9WMaOE716tFNJFHWYQQY0-hHPzOJOUPZ5pM0SezJye9xf6GmJg/exec";
 const AUTO_SAVE_INTERVAL_MS = 15000;
 const AUTO_CLOUD_SAVE_INTERVAL_MS = 300000;
+const AUTO_CLOUD_LOAD_INTERVAL_MS = 600000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
@@ -862,6 +863,7 @@ function replaceState(next) {
   state.manualCollapsed = next.manualCollapsed;
   state.timelineView = next.timelineView;
   state.addSectionsCollapsed = next.addSectionsCollapsed;
+  state.lastDataChangeAt = next.lastDataChangeAt;
 }
 
 async function cloudSave() {
@@ -912,7 +914,7 @@ async function cloudSaveRequest(endpoint) {
   const payload = {
     action: "save",
     sheetId: SPREADSHEET_ID,
-    savedAt: Date.now(),
+    savedAt: resolveStateUpdatedAt(state),
     data: state,
   };
   const res = await fetch(endpoint, {
@@ -968,6 +970,9 @@ function startCloudAutoSync() {
   setInterval(() => {
     autoCloudSave();
   }, AUTO_CLOUD_SAVE_INTERVAL_MS);
+  setInterval(() => {
+    autoCloudLoadPeriodic();
+  }, AUTO_CLOUD_LOAD_INTERVAL_MS);
 }
 
 async function autoCloudLoadOnStartup() {
@@ -984,6 +989,30 @@ async function autoCloudLoadOnStartup() {
     persistAndRender();
   } catch {
     // Silent failure for background startup sync.
+  } finally {
+    isCloudSyncBusy = false;
+    setCloudBusy(false);
+  }
+}
+
+async function autoCloudLoadPeriodic() {
+  const endpoint = el.cloudEndpoint.value.trim();
+  if (!endpoint || isCloudSyncBusy) return;
+
+  isCloudSyncBusy = true;
+  setCloudBusy(true);
+  try {
+    const parsed = await cloudLoadRequest(endpoint);
+    if (!parsed.data) return;
+    const migrated = migrateState(parsed.data);
+    const localStamp = resolveStateUpdatedAt(state);
+    const remoteStamp = resolveStateUpdatedAt(migrated, parsed.savedAt);
+    if (remoteStamp <= localStamp) return;
+    if (state.activeSession) return;
+    replaceState(migrated);
+    persistAndRender();
+  } catch {
+    // Silent failure for background periodic sync.
   } finally {
     isCloudSyncBusy = false;
     setCloudBusy(false);
@@ -1635,6 +1664,7 @@ function registerServiceWorker() {
 }
 
 function persistAndRender() {
+  state.lastDataChangeAt = Date.now();
   persistState();
   renderAll();
 }
@@ -1682,6 +1712,10 @@ function migrateState(parsed) {
     timelineView: normalizeTimelineView(parsed.timelineView),
     addSectionsCollapsed:
       typeof parsed.addSectionsCollapsed === "boolean" ? parsed.addSectionsCollapsed : false,
+    lastDataChangeAt:
+      Number.isFinite(parsed.lastDataChangeAt) && parsed.lastDataChangeAt > 0
+        ? parsed.lastDataChangeAt
+        : Date.now(),
   };
   next.tasks = Array.isArray(parsed.tasks)
     ? parsed.tasks.map((task) =>
@@ -1739,7 +1773,15 @@ function initialState() {
     manualCollapsed: true,
     timelineView: "calendar",
     addSectionsCollapsed: false,
+    lastDataChangeAt: Date.now(),
   };
+}
+
+function resolveStateUpdatedAt(target, fallback = 0) {
+  const stateStamp =
+    target && Number.isFinite(target.lastDataChangeAt) ? target.lastDataChangeAt : 0;
+  const fallbackStamp = Number.isFinite(fallback) ? fallback : 0;
+  return Math.max(stateStamp, fallbackStamp);
 }
 
 function uid() {
