@@ -1316,7 +1316,12 @@ function renderTimelineModal() {
         const detailTags = encodeURIComponent((e.customTags || []).join(", "));
         const sessionId = e.sessionId || "";
         const isActive = e.isActive ? "1" : "0";
+        const deleteBtn =
+          sessionId && !e.isActive
+            ? `<button type="button" class="timeline-event-delete-btn" data-session-id="${escapeHtml(sessionId)}" title="この記録を削除">×</button>`
+            : "";
         return `<article class="timeline-event ${tight} ${dense}" data-session-id="${escapeHtml(sessionId)}" data-is-active="${isActive}" data-detail-title="${detailTitle}" data-detail-range="${detailRange}" data-detail-tags="${detailTags}" data-detail-color="${e.color}" style="top:${e.startMin}px;height:${e.durationMin}px;left:calc(${left}% + 10px);width:calc(${laneWidth}% - 14px);border-left-color:${e.color};background:${e.color}22;">
+          ${deleteBtn}
           <p class="timeline-event-time">${formatTimelineTime(e.startAt)} - ${formatTimelineTime(e.endAt)}</p>
           <p class="timeline-event-label">${escapeHtml(e.taskLabel)}</p>
         </article>`;
@@ -1348,6 +1353,9 @@ function renderTimelineListView(items) {
         const editBtn = s.isActive
           ? ""
           : `<button type="button" class="timeline-edit-btn" data-session-id="${escapeHtml(s.sessionId)}">時間修正</button>`;
+        const deleteBtn = s.isActive
+          ? ""
+          : `<button type="button" class="timeline-delete-btn" data-session-id="${escapeHtml(s.sessionId)}">削除</button>`;
         return `<article class="timeline-legacy-row">
           <div class="timeline-legacy-main">
             <p class="timeline-legacy-time">${formatTimelineDateTime(s.startAt)}〜${formatTimelineDateTime(s.endAt)}：${formatDuration(
@@ -1356,7 +1364,7 @@ function renderTimelineListView(items) {
             <p class="timeline-legacy-label">${escapeHtml(s.taskLabel)}</p>
             ${tagLine}
           </div>
-          <div class="timeline-legacy-actions">${editBtn}</div>
+          <div class="timeline-legacy-actions">${editBtn}${deleteBtn}</div>
         </article>`;
       })
       .join("")}
@@ -1364,6 +1372,11 @@ function renderTimelineListView(items) {
   el.timelineList.querySelectorAll(".timeline-edit-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       editSessionTime(btn.dataset.sessionId);
+    });
+  });
+  el.timelineList.querySelectorAll(".timeline-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      deleteSession(btn.dataset.sessionId);
     });
   });
   el.timelineHoverDetail.classList.add("hidden");
@@ -1492,6 +1505,13 @@ function bindTimelineHoverDetail() {
       editSessionTime(eventNode.dataset.sessionId || "");
     });
   });
+
+  el.timelineList.querySelectorAll(".timeline-event-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteSession(btn.dataset.sessionId || "");
+    });
+  });
 }
 
 function editSessionTime(sessionId) {
@@ -1510,6 +1530,16 @@ function editSessionTime(sessionId) {
   }
   session.startAt = nextStart;
   session.endAt = nextEnd;
+  persistAndRender();
+}
+
+function deleteSession(sessionId) {
+  if (!sessionId) return;
+  const session = state.sessions.find((s) => s.id === sessionId);
+  if (!session) return;
+  const ok = confirm("このタイムライン記録を削除しますか？");
+  if (!ok) return;
+  state.sessions = state.sessions.filter((s) => s.id !== sessionId);
   persistAndRender();
 }
 

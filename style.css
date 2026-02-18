@@ -845,7 +845,7 @@ button:disabled {
   position: absolute;
   border-left: 4px solid #0f766e;
   border-radius: 8px;
-  padding: 6px 8px;
+  padding: 6px 28px 6px 8px;
   overflow: visible;
   min-height: 16px;
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
@@ -891,6 +891,30 @@ button:disabled {
 
 .timeline-event.is-dense .timeline-event-label {
   display: none;
+}
+
+.timeline-event-delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(15, 23, 42, 0.66);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.86;
+}
+
+.timeline-event-delete-btn:hover {
+  background: #b91c1c;
+  opacity: 1;
 }
 
 .timeline-hover-detail {
@@ -996,6 +1020,19 @@ button:disabled {
 
 .timeline-edit-btn:hover {
   background: #effcf9;
+}
+
+.timeline-delete-btn {
+  background: #fff;
+  color: #b91c1c;
+  border: 1px solid #efc2c2;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.timeline-delete-btn:hover {
+  background: #fff5f5;
 }
 
 .timeline-empty {
