@@ -102,6 +102,7 @@ setInterval(() => {
 }, AUTO_RECURRENCE_CHECK_MS);
 startAutoSave();
 startCloudAutoSync();
+registerServiceWorker();
 
 function bindEvents() {
   el.openTimelineModal.addEventListener("click", openTimelineModal);
@@ -1605,6 +1606,15 @@ function formatDuration(ms) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(() => {
+      // Ignore SW registration failure to avoid blocking app usage.
+    });
+  });
 }
 
 function persistAndRender() {
