@@ -2067,6 +2067,11 @@ function mergeStates(base, incoming) {
   const deletedTaskSet = new Set(deletedTaskIds);
   const deletedSessionSet = new Set(deletedSessionIds);
 
+  const baseUpdatedAt = resolveStateUpdatedAt(base);
+  const incomingUpdatedAt = resolveStateUpdatedAt(incoming);
+  const mergedActiveSession =
+    incomingUpdatedAt >= baseUpdatedAt ? incoming.activeSession : base.activeSession;
+
   const merged = {
     ...base,
     ...incoming,
@@ -2077,7 +2082,7 @@ function mergeStates(base, incoming) {
     sessions: mergeEntities(base.sessions, incoming.sessions).filter((s) => !deletedSessionSet.has(s.id)),
     deletedTaskIds,
     deletedSessionIds,
-    activeSession: incoming.activeSession || base.activeSession || null,
+    activeSession: mergedActiveSession || null,
     summaryOffsets: incoming.summaryOffsets || base.summaryOffsets,
     summaryExpanded: incoming.summaryExpanded || base.summaryExpanded,
     uiSelections: incoming.uiSelections || base.uiSelections,
