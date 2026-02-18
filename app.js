@@ -16,6 +16,8 @@ const state = loadState();
 let isCloudSyncBusy = false;
 let dragDropdownListenerInitialized = false;
 let draggingTaskId = "";
+let cloudSaveDebounceTimer = null;
+let cloudSavePending = false;
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -131,11 +133,11 @@ function bindEvents() {
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
     state.timelineView = normalizeTimelineView(btn.dataset.view);
-    persistAndRender();
+    persistUiAndRender();
   });
   el.addSectionsToggle.addEventListener("click", () => {
     state.addSectionsCollapsed = !state.addSectionsCollapsed;
-    persistAndRender();
+    persistUiAndRender();
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !el.timelineModal.classList.contains("hidden")) {
@@ -231,7 +233,7 @@ function bindEvents() {
   });
   el.manualToggle.addEventListener("click", () => {
     state.manualCollapsed = !state.manualCollapsed;
-    persistAndRender();
+    persistUiAndRender();
   });
 
   el.rangeSelect.addEventListener("change", () => {
@@ -242,20 +244,20 @@ function bindEvents() {
     const range = el.rangeSelect.value;
     const current = state.summaryOffsets[range] || 0;
     state.summaryOffsets[range] = current - 1;
-    persistAndRender();
+    persistUiAndRender();
   });
 
   el.summaryNext.addEventListener("click", () => {
     const range = el.rangeSelect.value;
     const current = state.summaryOffsets[range] || 0;
     state.summaryOffsets[range] = Math.min(0, current + 1);
-    persistAndRender();
+    persistUiAndRender();
   });
 
   el.summaryReset.addEventListener("click", () => {
     const range = el.rangeSelect.value;
     state.summaryOffsets[range] = 0;
-    persistAndRender();
+    persistUiAndRender();
   });
 
   el.summaryTabs.addEventListener("click", (e) => {
@@ -263,7 +265,7 @@ function bindEvents() {
     if (!target) return;
     const tab = target.dataset.tab;
     state.summaryTab = normalizeSummaryTab(tab);
-    persistAndRender();
+    persistUiAndRender();
   });
 
   el.backupExport.addEventListener("click", exportBackup);
@@ -286,11 +288,11 @@ function bindEvents() {
   });
   el.taskLargeFilter.addEventListener("change", () => {
     state.taskLargeFilterValue = el.taskLargeFilter.value;
-    persistAndRender();
+    persistUiAndRender();
   });
   el.taskMidFilter.addEventListener("change", () => {
     state.taskMidFilterValue = el.taskMidFilter.value;
-    persistAndRender();
+    persistUiAndRender();
   });
 }
 
@@ -464,7 +466,7 @@ function renderStatusFilter() {
         next.add(status);
       }
       state.taskFilterStatuses = STATUS_OPTIONS.filter((s) => next.has(s));
-      persistAndRender();
+      persistUiAndRender();
     });
   });
 
@@ -476,14 +478,14 @@ function renderStatusFilter() {
       } else {
         state.taskFilterStatuses = [];
       }
-      persistAndRender();
+      persistUiAndRender();
     });
   });
 
   el.statusFilter.querySelectorAll(".today-filter-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.taskTodayFilterValue = btn.dataset.todayFilter === "today" ? "today" : "all";
-      persistAndRender();
+      persistUiAndRender();
     });
   });
 }
@@ -737,7 +739,7 @@ function renderList(container, map, totalMs, sectionKey) {
   if (expandBtn) {
     expandBtn.addEventListener("click", () => {
       state.summaryExpanded[sectionKey] = !Boolean(state.summaryExpanded[sectionKey]);
-      persistAndRender();
+      persistUiAndRender();
     });
   }
 }
@@ -771,8 +773,7 @@ function stopTask(taskId) {
     updatedAt: Date.now(),
   });
   state.activeSession = null;
-  persistAndRender();
-  autoCloudSave();
+  persistAndRender("now");
 }
 
 function deleteTask(taskId) {
@@ -926,7 +927,7 @@ async function cloudLoad() {
     const ok = confirm("クラウドデータで現在データを上書きしますか？");
     if (!ok) return;
     replaceState(migrated);
-    persistAndRender();
+    persistUiAndRender();
   } catch (error) {
     alert(error.message || "クラウド読込に失敗しました。");
   } finally {
@@ -1014,7 +1015,7 @@ async function autoCloudLoadOnStartup() {
     if (!parsed.data) return;
     const migrated = migrateState(parsed.data);
     replaceState(migrated);
-    persistAndRender();
+    persistUiAndRender();
   } catch {
     // Silent failure for background startup sync.
   } finally {
@@ -1045,7 +1046,7 @@ async function autoCloudLoadPeriodic() {
     const mergedSerialized = JSON.stringify(merged);
     if (localSerialized === mergedSerialized) return;
     replaceState(merged);
-    persistAndRender();
+    persistUiAndRender();
   } catch {
     // Silent failure for background periodic sync.
   } finally {
@@ -1734,10 +1735,61 @@ function registerServiceWorker() {
   });
 }
 
-function persistAndRender() {
+function persistAndRender(cloudMode = "queued") {
   state.lastDataChangeAt = Date.now();
   persistState();
   renderAll();
+  if (cloudMode === "now") {
+    queueCloudSave(0);
+    return;
+  }
+  if (cloudMode === "queued") {
+    queueCloudSave(1200);
+  }
+}
+
+function persistUiAndRender() {
+  persistState();
+  renderAll();
+}
+
+function queueCloudSave(delayMs = 1200) {
+  cloudSavePending = true;
+  if (cloudSaveDebounceTimer) {
+    clearTimeout(cloudSaveDebounceTimer);
+  }
+  cloudSaveDebounceTimer = setTimeout(() => {
+    cloudSaveDebounceTimer = null;
+    flushQueuedCloudSave();
+  }, Math.max(0, delayMs));
+}
+
+async function flushQueuedCloudSave() {
+  if (!cloudSavePending) return;
+  const endpoint = el.cloudEndpoint.value.trim();
+  if (!endpoint) {
+    cloudSavePending = false;
+    return;
+  }
+  if (isCloudSyncBusy) {
+    queueCloudSave(1500);
+    return;
+  }
+
+  cloudSavePending = false;
+  isCloudSyncBusy = true;
+  setCloudBusy(true);
+  try {
+    await cloudSaveRequest(endpoint);
+  } catch {
+    // Silent failure for background queued sync.
+  } finally {
+    isCloudSyncBusy = false;
+    setCloudBusy(false);
+    if (cloudSavePending) {
+      queueCloudSave(500);
+    }
+  }
 }
 
 function loadState() {
