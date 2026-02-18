@@ -1012,6 +1012,9 @@ async function cloudLoad() {
 
 async function cloudSaveRequest(endpoint) {
   const mergedData = await mergeStateWithCloud(endpoint, state);
+  if (!mergedData) {
+    throw new Error("クラウド読込に失敗したため、上書き事故防止のため保存を中止しました。");
+  }
   const savedAt = resolveStateUpdatedAt(mergedData);
   const payload = {
     action: "save",
@@ -2054,7 +2057,7 @@ async function mergeStateWithCloud(endpoint, localState) {
     const remoteState = migrateState(parsed.data);
     return mergeStates(remoteState, localState);
   } catch {
-    return localState;
+    return null;
   }
 }
 
