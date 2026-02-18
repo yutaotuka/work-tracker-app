@@ -1,5 +1,10 @@
 const TARGET_SHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
 const SHEET_NAME = "app_state";
+const MAX_HISTORY_ROWS = 3000;
+const DATA_START_ROW = 2;
+const META_LATEST_ROW_LABEL = "meta_latest_row";
+const META_LATEST_ROW_CELL = "E1";
+const META_LATEST_ROW_LABEL_CELL = "D1";
 
 function doGet(e) {
   const action = getParam(e, "action");
@@ -12,8 +17,8 @@ function doGet(e) {
     lock.waitLock(10000);
     const sheetId = getParam(e, "sheetId") || TARGET_SHEET_ID;
     const sheet = getOrCreateSheet(sheetId);
-    const row = sheet.getLastRow();
-    if (row < 2) {
+    const row = getLatestDataRow(sheet);
+    if (!row) {
       if (action === "latest") {
         return jsonOut({ ok: true, hasData: false, savedAt: 0 });
       }
@@ -57,8 +62,10 @@ function doPost(e) {
     const savedAt = body.savedAt || Date.now();
     const json = JSON.stringify(body.data || {});
 
-    sheet.appendRow([new Date(savedAt), savedAt, json]);
-    return jsonOut({ ok: true });
+    const writeRow = getNextWriteRow(sheet);
+    sheet.getRange(writeRow, 1, 1, 3).setValues([[new Date(savedAt), savedAt, json]]);
+    setLatestDataRow(sheet, writeRow);
+    return jsonOut({ ok: true, row: writeRow });
   } catch (err) {
     return jsonOut({ ok: false, message: String(err) });
   } finally {
@@ -76,8 +83,38 @@ function getOrCreateSheet(sheetId) {
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.getRange(1, 1, 1, 3).setValues([["saved_at_human", "saved_at_ms", "data_json"]]);
+    sheet.getRange(META_LATEST_ROW_LABEL_CELL).setValue(META_LATEST_ROW_LABEL);
+    sheet.getRange(META_LATEST_ROW_CELL).setValue(0);
   }
   return sheet;
+}
+
+function getLatestDataRow(sheet) {
+  const metaRow = Number(sheet.getRange(META_LATEST_ROW_CELL).getValue());
+  if (isValidDataRow(metaRow)) {
+    const stamp = Number(sheet.getRange(metaRow, 2).getValue()) || 0;
+    if (stamp > 0) return metaRow;
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < DATA_START_ROW) return 0;
+  return lastRow;
+}
+
+function getNextWriteRow(sheet) {
+  const latestRow = getLatestDataRow(sheet);
+  if (!latestRow) return DATA_START_ROW;
+  const offset = (latestRow - DATA_START_ROW + 1) % MAX_HISTORY_ROWS;
+  return DATA_START_ROW + offset;
+}
+
+function setLatestDataRow(sheet, row) {
+  sheet.getRange(META_LATEST_ROW_LABEL_CELL).setValue(META_LATEST_ROW_LABEL);
+  sheet.getRange(META_LATEST_ROW_CELL).setValue(row);
+}
+
+function isValidDataRow(row) {
+  return Number.isFinite(row) && row >= DATA_START_ROW && row < DATA_START_ROW + MAX_HISTORY_ROWS;
 }
 
 function getParam(e, key) {
