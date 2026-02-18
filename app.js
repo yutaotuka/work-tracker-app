@@ -6,6 +6,7 @@ const CLOUD_ENDPOINT_DEFAULT =
 const AUTO_SAVE_INTERVAL_MS = 15000;
 const AUTO_CLOUD_SAVE_INTERVAL_MS = 300000;
 const AUTO_CLOUD_LOAD_INTERVAL_MS = 600000;
+const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 60000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
@@ -18,6 +19,7 @@ let dragDropdownListenerInitialized = false;
 let draggingTaskId = "";
 let cloudSaveDebounceTimer = null;
 let cloudSavePending = false;
+let lastSeenCloudSavedAt = 0;
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -284,7 +286,12 @@ function bindEvents() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       persistState();
+      return;
     }
+    autoCloudCheckForRemoteUpdate();
+  });
+  window.addEventListener("focus", () => {
+    autoCloudCheckForRemoteUpdate();
   });
   el.taskLargeFilter.addEventListener("change", () => {
     state.taskLargeFilterValue = el.taskLargeFilter.value;
@@ -924,6 +931,10 @@ async function cloudLoad() {
       return;
     }
     const migrated = migrateState(parsed.data);
+    lastSeenCloudSavedAt = Math.max(
+      lastSeenCloudSavedAt,
+      Number.isFinite(parsed.savedAt) ? parsed.savedAt : resolveStateUpdatedAt(migrated)
+    );
     const ok = confirm("クラウドデータで現在データを上書きしますか？");
     if (!ok) return;
     replaceState(migrated);
@@ -938,10 +949,11 @@ async function cloudLoad() {
 
 async function cloudSaveRequest(endpoint) {
   const mergedData = await mergeStateWithCloud(endpoint, state);
+  const savedAt = resolveStateUpdatedAt(mergedData);
   const payload = {
     action: "save",
     sheetId: SPREADSHEET_ID,
-    savedAt: resolveStateUpdatedAt(mergedData),
+    savedAt,
     data: mergedData,
   };
   const res = await fetch(endpoint, {
@@ -953,6 +965,7 @@ async function cloudSaveRequest(endpoint) {
   if (!res.ok || !parsed.ok) {
     throw new Error(parsed.message || "クラウド保存に失敗しました。");
   }
+  lastSeenCloudSavedAt = Math.max(lastSeenCloudSavedAt, savedAt);
   replaceState(migrateState(mergedData));
   persistState();
   return parsed;
@@ -969,6 +982,19 @@ async function cloudLoadRequest(endpoint) {
     throw new Error(parsed.message || "クラウド読込に失敗しました。");
   }
   return parsed;
+}
+
+async function cloudLatestSavedAtRequest(endpoint) {
+  const url = new URL(endpoint);
+  url.searchParams.set("action", "latest");
+  url.searchParams.set("sheetId", SPREADSHEET_ID);
+  const res = await fetch(url.toString(), { method: "GET" });
+  const text = await res.text();
+  const parsed = parseCloudResponse(text);
+  if (!res.ok || !parsed.ok) {
+    throw new Error(parsed.message || "クラウド更新確認に失敗しました。");
+  }
+  return Number.isFinite(parsed.savedAt) ? parsed.savedAt : 0;
 }
 
 function parseCloudResponse(text) {
@@ -1000,6 +1026,9 @@ function startCloudAutoSync() {
     autoCloudSave();
   }, AUTO_CLOUD_SAVE_INTERVAL_MS);
   setInterval(() => {
+    autoCloudCheckForRemoteUpdate();
+  }, AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS);
+  setInterval(() => {
     autoCloudLoadPeriodic();
   }, AUTO_CLOUD_LOAD_INTERVAL_MS);
 }
@@ -1014,6 +1043,10 @@ async function autoCloudLoadOnStartup() {
     const parsed = await cloudLoadRequest(endpoint);
     if (!parsed.data) return;
     const migrated = migrateState(parsed.data);
+    lastSeenCloudSavedAt = Math.max(
+      lastSeenCloudSavedAt,
+      Number.isFinite(parsed.savedAt) ? parsed.savedAt : resolveStateUpdatedAt(migrated)
+    );
     replaceState(migrated);
     persistUiAndRender();
   } catch {
@@ -1021,6 +1054,19 @@ async function autoCloudLoadOnStartup() {
   } finally {
     isCloudSyncBusy = false;
     setCloudBusy(false);
+  }
+}
+
+async function autoCloudCheckForRemoteUpdate() {
+  const endpoint = el.cloudEndpoint.value.trim();
+  if (!endpoint || isCloudSyncBusy) return;
+  if (state.activeSession) return;
+  try {
+    const latestSavedAt = await cloudLatestSavedAtRequest(endpoint);
+    if (!latestSavedAt || latestSavedAt <= lastSeenCloudSavedAt) return;
+    await autoCloudLoadPeriodic();
+  } catch {
+    // Silent failure for background update checks.
   }
 }
 
@@ -1033,6 +1079,10 @@ async function autoCloudLoadPeriodic() {
   try {
     const parsed = await cloudLoadRequest(endpoint);
     if (!parsed.data) return;
+    lastSeenCloudSavedAt = Math.max(
+      lastSeenCloudSavedAt,
+      Number.isFinite(parsed.savedAt) ? parsed.savedAt : 0
+    );
     const remote = migrateState(parsed.data);
     const local = migrateState(state);
     const merged = mergeStates(remote, local);

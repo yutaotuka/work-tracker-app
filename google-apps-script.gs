@@ -3,7 +3,7 @@ const SHEET_NAME = "app_state";
 
 function doGet(e) {
   const action = getParam(e, "action");
-  if (action !== "load") {
+  if (action !== "load" && action !== "latest") {
     return jsonOut({ ok: false, message: "Invalid action" });
   }
 
@@ -14,16 +14,24 @@ function doGet(e) {
     const sheet = getOrCreateSheet(sheetId);
     const row = sheet.getLastRow();
     if (row < 2) {
-      return jsonOut({ ok: true, data: null, message: "No saved data" });
+      if (action === "latest") {
+        return jsonOut({ ok: true, hasData: false, savedAt: 0 });
+      }
+      return jsonOut({ ok: true, data: null, savedAt: 0, message: "No saved data" });
+    }
+
+    const savedAt = Number(sheet.getRange(row, 2).getValue()) || 0;
+    if (action === "latest") {
+      return jsonOut({ ok: true, hasData: true, savedAt });
     }
 
     const value = sheet.getRange(row, 3).getValue();
     if (!value) {
-      return jsonOut({ ok: true, data: null, message: "No saved data" });
+      return jsonOut({ ok: true, data: null, savedAt, message: "No saved data" });
     }
 
     const parsed = JSON.parse(value);
-    return jsonOut({ ok: true, data: parsed });
+    return jsonOut({ ok: true, data: parsed, savedAt });
   } catch (err) {
     return jsonOut({ ok: false, message: String(err) });
   } finally {
