@@ -7,7 +7,9 @@ function doGet(e) {
     return jsonOut({ ok: false, message: "Invalid action" });
   }
 
+  const lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     const sheetId = getParam(e, "sheetId") || TARGET_SHEET_ID;
     const sheet = getOrCreateSheet(sheetId);
     const row = sheet.getLastRow();
@@ -24,11 +26,19 @@ function doGet(e) {
     return jsonOut({ ok: true, data: parsed });
   } catch (err) {
     return jsonOut({ ok: false, message: String(err) });
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (e) {
+      // Ignore unlock errors.
+    }
   }
 }
 
 function doPost(e) {
+  const lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     const body = JSON.parse(e.postData.contents || "{}");
     if (body.action !== "save") {
       return jsonOut({ ok: false, message: "Invalid action" });
@@ -43,6 +53,12 @@ function doPost(e) {
     return jsonOut({ ok: true });
   } catch (err) {
     return jsonOut({ ok: false, message: String(err) });
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (e) {
+      // Ignore unlock errors.
+    }
   }
 }
 

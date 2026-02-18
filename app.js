@@ -147,7 +147,7 @@ function bindEvents() {
     e.preventDefault();
     const name = el.topName.value.trim();
     if (!name) return;
-    state.topGroups.push({ id: uid(), name });
+    state.topGroups.push({ id: uid(), name, updatedAt: Date.now() });
     el.topName.value = "";
     persistAndRender();
   });
@@ -157,7 +157,7 @@ function bindEvents() {
     const topGroupId = state.uiSelections.largeTopId;
     const name = el.largeName.value.trim();
     if (!topGroupId || !name) return;
-    state.largeGroups.push({ id: uid(), name, topGroupId });
+    state.largeGroups.push({ id: uid(), name, topGroupId, updatedAt: Date.now() });
     el.largeName.value = "";
     persistAndRender();
   });
@@ -167,7 +167,7 @@ function bindEvents() {
     const largeGroupId = state.uiSelections.midLargeId;
     const name = el.midName.value.trim();
     if (!largeGroupId || !name) return;
-    state.midGroups.push({ id: uid(), name, largeGroupId });
+    state.midGroups.push({ id: uid(), name, largeGroupId, updatedAt: Date.now() });
     el.midName.value = "";
     persistAndRender();
   });
@@ -190,6 +190,7 @@ function bindEvents() {
       recurrence: "none",
       recurrenceResetKey: "",
       tags,
+      updatedAt: Date.now(),
     });
     el.taskName.value = "";
     el.taskTags.value = "";
@@ -523,6 +524,7 @@ function renderTasks() {
     statusSelect.value = normalizeStatus(task.status);
     statusSelect.addEventListener("change", () => {
       task.status = normalizeStatus(statusSelect.value);
+      task.updatedAt = Date.now();
       persistAndRender();
     });
 
@@ -534,6 +536,7 @@ function renderTasks() {
     repeatSelect.addEventListener("change", () => {
       task.recurrence = normalizeRecurrence(repeatSelect.value);
       task.recurrenceResetKey = task.recurrence === "none" ? "" : getRecurrencePeriodKey(task.recurrence);
+      task.updatedAt = Date.now();
       persistAndRender();
     });
 
@@ -548,6 +551,7 @@ function renderTasks() {
     todayBtn.classList.toggle("is-active", Boolean(task.isTodayTask));
     todayBtn.addEventListener("click", () => {
       task.isTodayTask = !task.isTodayTask;
+      task.updatedAt = Date.now();
       persistAndRender();
     });
     renameBtn.addEventListener("click", () => renameTask(task.id));
@@ -746,6 +750,7 @@ function startTask(taskId) {
   const task = state.tasks.find((t) => t.id === taskId);
   if (task) {
     task.status = "着手";
+    task.updatedAt = Date.now();
   }
   state.activeSession = { taskId, startAt: Date.now() };
   persistAndRender();
@@ -763,6 +768,7 @@ function stopTask(taskId) {
     startAt,
     endAt,
     snapshot,
+    updatedAt: Date.now(),
   });
   state.activeSession = null;
   persistAndRender();
@@ -779,6 +785,9 @@ function deleteTask(taskId) {
   const ok = confirm(`タスク「${task.name}」を削除しますか？`);
   if (!ok) return;
   state.tasks = state.tasks.filter((t) => t.id !== taskId);
+  if (!state.deletedTaskIds.includes(taskId)) {
+    state.deletedTaskIds.push(taskId);
+  }
   persistAndRender();
 }
 
@@ -794,6 +803,7 @@ function renameTask(taskId) {
   }
   if (trimmed === task.name) return;
   task.name = trimmed;
+  task.updatedAt = Date.now();
   persistAndRender();
 }
 
@@ -810,6 +820,7 @@ function addManualSession(taskId, startAt, endAt) {
     startAt,
     endAt,
     snapshot,
+    updatedAt: Date.now(),
   });
 }
 
@@ -860,6 +871,8 @@ function replaceState(next) {
   state.midGroups = next.midGroups;
   state.tasks = next.tasks;
   state.sessions = next.sessions;
+  state.deletedTaskIds = next.deletedTaskIds;
+  state.deletedSessionIds = next.deletedSessionIds;
   state.activeSession = next.activeSession;
   state.taskFilterStatuses = next.taskFilterStatuses;
   state.summaryTab = next.summaryTab;
@@ -923,11 +936,12 @@ async function cloudLoad() {
 }
 
 async function cloudSaveRequest(endpoint) {
+  const mergedData = await mergeStateWithCloud(endpoint, state);
   const payload = {
     action: "save",
     sheetId: SPREADSHEET_ID,
-    savedAt: resolveStateUpdatedAt(state),
-    data: state,
+    savedAt: resolveStateUpdatedAt(mergedData),
+    data: mergedData,
   };
   const res = await fetch(endpoint, {
     method: "POST",
@@ -938,6 +952,8 @@ async function cloudSaveRequest(endpoint) {
   if (!res.ok || !parsed.ok) {
     throw new Error(parsed.message || "クラウド保存に失敗しました。");
   }
+  replaceState(migrateState(mergedData));
+  persistState();
   return parsed;
 }
 
@@ -1016,12 +1032,19 @@ async function autoCloudLoadPeriodic() {
   try {
     const parsed = await cloudLoadRequest(endpoint);
     if (!parsed.data) return;
-    const migrated = migrateState(parsed.data);
-    const localStamp = resolveStateUpdatedAt(state);
-    const remoteStamp = resolveStateUpdatedAt(migrated, parsed.savedAt);
-    if (remoteStamp <= localStamp) return;
-    if (state.activeSession) return;
-    replaceState(migrated);
+    const remote = migrateState(parsed.data);
+    const local = migrateState(state);
+    const merged = mergeStates(remote, local);
+    const localStamp = resolveStateUpdatedAt(local);
+    const mergedStamp = resolveStateUpdatedAt(merged, parsed.savedAt);
+    if (mergedStamp < localStamp) return;
+    if (state.activeSession && !merged.activeSession) {
+      merged.activeSession = state.activeSession;
+    }
+    const localSerialized = JSON.stringify(local);
+    const mergedSerialized = JSON.stringify(merged);
+    if (localSerialized === mergedSerialized) return;
+    replaceState(merged);
     persistAndRender();
   } catch {
     // Silent failure for background periodic sync.
@@ -1542,6 +1565,7 @@ function editSessionTime(sessionId) {
   }
   session.startAt = nextStart;
   session.endAt = nextEnd;
+  session.updatedAt = Date.now();
   persistAndRender();
 }
 
@@ -1552,6 +1576,9 @@ function deleteSession(sessionId) {
   const ok = confirm("このタイムライン記録を削除しますか？");
   if (!ok) return;
   state.sessions = state.sessions.filter((s) => s.id !== sessionId);
+  if (!state.deletedSessionIds.includes(sessionId)) {
+    state.deletedSessionIds.push(sessionId);
+  }
   persistAndRender();
 }
 
@@ -1596,10 +1623,12 @@ function applyRecurringResets() {
     }
     if (task.recurrenceResetKey !== currentKey && normalizeStatus(task.status) === "完了") {
       task.status = "未着手";
+      task.updatedAt = Date.now();
       changed = true;
     }
     if (task.recurrenceResetKey !== currentKey) {
       task.recurrenceResetKey = currentKey;
+      task.updatedAt = Date.now();
       changed = true;
     }
   });
@@ -1722,16 +1751,35 @@ function loadState() {
 function migrateState(parsed) {
   const next = {
     topGroups: Array.isArray(parsed.topGroups)
-      ? parsed.topGroups.map((g) => ({ ...g, archived: Boolean(g.archived) }))
+      ? parsed.topGroups.map((g) => ({
+          ...g,
+          archived: Boolean(g.archived),
+          updatedAt: Number.isFinite(g.updatedAt) ? g.updatedAt : 0,
+        }))
       : [],
     largeGroups: Array.isArray(parsed.largeGroups)
-      ? parsed.largeGroups.map((g) => ({ ...g, archived: Boolean(g.archived) }))
+      ? parsed.largeGroups.map((g) => ({
+          ...g,
+          archived: Boolean(g.archived),
+          updatedAt: Number.isFinite(g.updatedAt) ? g.updatedAt : 0,
+        }))
       : [],
     midGroups: Array.isArray(parsed.midGroups)
-      ? parsed.midGroups.map((g) => ({ ...g, archived: Boolean(g.archived) }))
+      ? parsed.midGroups.map((g) => ({
+          ...g,
+          archived: Boolean(g.archived),
+          updatedAt: Number.isFinite(g.updatedAt) ? g.updatedAt : 0,
+        }))
       : [],
     tasks: [],
-    sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+    sessions: Array.isArray(parsed.sessions)
+      ? parsed.sessions.map((s) => ({
+          ...s,
+          updatedAt: Number.isFinite(s.updatedAt) ? s.updatedAt : 0,
+        }))
+      : [],
+    deletedTaskIds: uniqueStrings(parsed.deletedTaskIds),
+    deletedSessionIds: uniqueStrings(parsed.deletedSessionIds),
     activeSession: parsed.activeSession || null,
     taskFilterStatuses: Array.isArray(parsed.taskFilterStatuses)
       ? parsed.taskFilterStatuses.filter((s) => STATUS_OPTIONS.includes(s))
@@ -1765,6 +1813,10 @@ function migrateState(parsed) {
         normalizeTaskRecord(task, next.midGroups, next.largeGroups)
       )
     : [];
+  const deletedTaskSet = new Set(next.deletedTaskIds);
+  const deletedSessionSet = new Set(next.deletedSessionIds);
+  next.tasks = next.tasks.filter((t) => !deletedTaskSet.has(t.id));
+  next.sessions = next.sessions.filter((s) => !deletedSessionSet.has(s.id));
 
   const hasMissingTopRef = next.largeGroups.some((g) => !g.topGroupId);
   if (!next.topGroups.length || hasMissingTopRef) {
@@ -1802,6 +1854,8 @@ function initialState() {
     midGroups: [],
     tasks: [],
     sessions: [],
+    deletedTaskIds: [],
+    deletedSessionIds: [],
     activeSession: null,
     taskFilterStatuses: [...STATUS_OPTIONS],
     summaryTab: "task",
@@ -1826,6 +1880,72 @@ function resolveStateUpdatedAt(target, fallback = 0) {
     target && Number.isFinite(target.lastDataChangeAt) ? target.lastDataChangeAt : 0;
   const fallbackStamp = Number.isFinite(fallback) ? fallback : 0;
   return Math.max(stateStamp, fallbackStamp);
+}
+
+async function mergeStateWithCloud(endpoint, localState) {
+  try {
+    const parsed = await cloudLoadRequest(endpoint);
+    if (!parsed.data) return localState;
+    const remoteState = migrateState(parsed.data);
+    return mergeStates(remoteState, localState);
+  } catch {
+    return localState;
+  }
+}
+
+function mergeStates(base, incoming) {
+  const deletedTaskIds = uniqueStrings([...(base.deletedTaskIds || []), ...(incoming.deletedTaskIds || [])]);
+  const deletedSessionIds = uniqueStrings([
+    ...(base.deletedSessionIds || []),
+    ...(incoming.deletedSessionIds || []),
+  ]);
+  const deletedTaskSet = new Set(deletedTaskIds);
+  const deletedSessionSet = new Set(deletedSessionIds);
+
+  const merged = {
+    ...base,
+    ...incoming,
+    topGroups: mergeEntities(base.topGroups, incoming.topGroups),
+    largeGroups: mergeEntities(base.largeGroups, incoming.largeGroups),
+    midGroups: mergeEntities(base.midGroups, incoming.midGroups),
+    tasks: mergeEntities(base.tasks, incoming.tasks).filter((t) => !deletedTaskSet.has(t.id)),
+    sessions: mergeEntities(base.sessions, incoming.sessions).filter((s) => !deletedSessionSet.has(s.id)),
+    deletedTaskIds,
+    deletedSessionIds,
+    activeSession: incoming.activeSession || base.activeSession || null,
+    summaryOffsets: incoming.summaryOffsets || base.summaryOffsets,
+    summaryExpanded: incoming.summaryExpanded || base.summaryExpanded,
+    uiSelections: incoming.uiSelections || base.uiSelections,
+    archiveView: incoming.archiveView || base.archiveView,
+    taskFilterStatuses: incoming.taskFilterStatuses || base.taskFilterStatuses,
+    taskParentOrder: incoming.taskParentOrder || base.taskParentOrder,
+    lastDataChangeAt: Math.max(resolveStateUpdatedAt(base), resolveStateUpdatedAt(incoming)),
+  };
+
+  return migrateState(merged);
+}
+
+function mergeEntities(baseList, incomingList) {
+  const byId = new Map();
+  (Array.isArray(baseList) ? baseList : []).forEach((item) => {
+    if (item && item.id) byId.set(item.id, item);
+  });
+  (Array.isArray(incomingList) ? incomingList : []).forEach((item) => {
+    if (!item || !item.id) return;
+    const current = byId.get(item.id);
+    if (!current) {
+      byId.set(item.id, item);
+      return;
+    }
+    const currentStamp = Number.isFinite(current.updatedAt) ? current.updatedAt : 0;
+    const nextStamp = Number.isFinite(item.updatedAt) ? item.updatedAt : 0;
+    byId.set(item.id, nextStamp >= currentStamp ? item : current);
+  });
+  return [...byId.values()];
+}
+
+function uniqueStrings(values) {
+  return [...new Set((values || []).filter((v) => typeof v === "string" && v))];
 }
 
 function uid() {
@@ -1884,6 +2004,7 @@ function normalizeTaskRecord(task, midGroups, largeGroups) {
     ...task,
     status: normalizeStatus(task.status),
     isTodayTask: Boolean(task.isTodayTask),
+    updatedAt: Number.isFinite(task.updatedAt) ? task.updatedAt : 0,
     recurrence: normalizeRecurrence(task.recurrence),
     recurrenceResetKey:
       typeof task.recurrenceResetKey === "string" ? task.recurrenceResetKey : "",
@@ -2136,6 +2257,7 @@ function toggleArchive(entityType, entityId) {
   const target = targetArray.find((item) => item.id === entityId);
   if (!target) return;
   target.archived = !target.archived;
+  target.updatedAt = Date.now();
 }
 
 function filterArchivedOptions(options, showArchived) {
