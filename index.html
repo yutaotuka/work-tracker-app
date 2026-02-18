@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>工数トラッカー</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="header">
+      <h1>工数トラッカー</h1>
+      <p>最上位グループ > 大グループ > 中グループ > タスク で計測・集計</p>
+      <div class="header-actions">
+        <button id="open-timeline-modal" type="button" class="header-link">タイムラインを開く</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section id="top-group-card" class="card">
+        <h2>最上位グループ追加</h2>
+        <form id="top-form" class="row-form">
+          <input id="top-name" type="text" placeholder="例: 事業A" required />
+          <button type="submit">追加</button>
+        </form>
+      </section>
+
+      <section id="large-group-card" class="card">
+        <h2>大グループ追加</h2>
+        <form id="large-form" class="row-form">
+          <div id="large-top-select" class="drag-dropdown"></div>
+          <input id="large-name" type="text" placeholder="例: 開発" required />
+          <button type="submit">追加</button>
+        </form>
+      </section>
+
+      <section id="mid-group-card" class="card">
+        <h2>中グループ追加</h2>
+        <form id="mid-form" class="row-form">
+          <div id="mid-large-select" class="drag-dropdown"></div>
+          <input id="mid-name" type="text" placeholder="例: フロントエンド" required />
+          <button type="submit">追加</button>
+        </form>
+      </section>
+
+      <section id="task-add-card" class="card">
+        <h2>タスク追加</h2>
+        <form id="task-form" class="row-form stack-on-mobile">
+          <div id="task-mid-select" class="drag-dropdown wide"></div>
+          <input id="task-name" type="text" placeholder="例: ログイン画面作成" required />
+          <select id="task-status">
+            <option value="未着手">未着手</option>
+            <option value="着手">着手</option>
+            <option value="チェック中">チェック中</option>
+            <option value="完了">完了</option>
+            <option value="取り下げ">取り下げ</option>
+          </select>
+          <input id="task-tags" type="text" placeholder="タグ(任意): bugfix, urgent" />
+          <button type="submit">追加</button>
+        </form>
+      </section>
+
+      <section id="task-list-card" class="card">
+        <h2>タスク一覧</h2>
+        <div class="backup-actions">
+          <button id="backup-export" type="button">JSON保存</button>
+          <button id="backup-import" type="button">JSON読込</button>
+          <input
+            id="cloud-endpoint"
+            type="url"
+            placeholder="Apps Script WebアプリURL"
+            autocomplete="off"
+          />
+          <button id="cloud-save" type="button">クラウド保存</button>
+          <button id="cloud-load" type="button">クラウド読込</button>
+          <input id="backup-file" type="file" accept="application/json" hidden />
+        </div>
+        <div class="row-form">
+          <label for="task-large-filter">大グループ絞り込み</label>
+          <select id="task-large-filter"></select>
+          <label for="task-mid-filter">中グループ絞り込み</label>
+          <select id="task-mid-filter"></select>
+        </div>
+        <div id="status-filter" class="status-filter"></div>
+        <p id="active-status" class="status">稼働中タスク: なし</p>
+        <div id="task-list"></div>
+      </section>
+
+      <section id="manual-card" class="card manual-card">
+        <div class="manual-header">
+          <h2>手動工数登録</h2>
+          <button id="manual-toggle" type="button" class="manual-toggle-btn">開く</button>
+        </div>
+        <div id="manual-panel" class="manual-panel">
+          <form id="manual-form" class="row-form stack-on-mobile">
+            <select id="manual-task-select" required></select>
+            <label>
+              日付
+              <input id="manual-date" type="date" required />
+            </label>
+            <label>
+              時間
+              <input id="manual-hours" type="number" min="0" step="1" value="0" required />
+            </label>
+            <label>
+              分
+              <input id="manual-minutes" type="number" min="0" max="59" step="1" value="0" required />
+            </label>
+            <button type="submit">手動追加</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="summary-card" class="card summary-card">
+        <h2>集計</h2>
+        <div class="summary-toolbar">
+          <div class="row-form">
+            <label for="range-select">期間</label>
+            <select id="range-select">
+              <option value="day">1日</option>
+              <option value="week">1週間</option>
+              <option value="month">1ヶ月</option>
+            </select>
+            <button id="summary-prev" type="button">前へ</button>
+            <button id="summary-next" type="button">次へ</button>
+            <button id="summary-reset" type="button">現在へ戻る</button>
+          </div>
+          <div class="summary-meta">
+            <p id="summary-period" class="summary-period"></p>
+            <p id="summary-total" class="summary-total"></p>
+          </div>
+        </div>
+
+        <div id="summary-tabs" class="summary-tabs">
+          <button type="button" class="summary-tab-btn" data-tab="task">タスク</button>
+          <button type="button" class="summary-tab-btn" data-tab="mid">中グループ</button>
+          <button type="button" class="summary-tab-btn" data-tab="large">大グループ</button>
+          <button type="button" class="summary-tab-btn" data-tab="top">最上位グループ</button>
+          <button type="button" class="summary-tab-btn" data-tab="tags">タグ</button>
+        </div>
+
+        <div class="summary-tab-panels">
+          <div class="summary-panel summary-tab-panel" data-panel="task">
+            <h3>タスク毎</h3>
+            <ul id="summary-task" class="summary-list"></ul>
+          </div>
+          <div class="summary-panel summary-tab-panel" data-panel="mid">
+            <h3>中グループ毎</h3>
+            <ul id="summary-mid" class="summary-list"></ul>
+          </div>
+          <div class="summary-panel summary-tab-panel" data-panel="large">
+            <h3>大グループ毎</h3>
+            <ul id="summary-large" class="summary-list"></ul>
+          </div>
+          <div class="summary-panel summary-tab-panel" data-panel="top">
+            <h3>最上位グループ毎</h3>
+            <ul id="summary-top" class="summary-list"></ul>
+          </div>
+          <div class="summary-panel summary-tab-panel" data-panel="tags">
+            <h3>全タグ</h3>
+            <ul id="summary-tags" class="summary-list"></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <template id="task-row-template">
+      <article class="task-row">
+        <div class="task-main">
+          <div class="task-title-row">
+            <span class="task-drag-handle" title="ドラッグして並び替え">≡</span>
+            <strong class="task-title"></strong>
+            <span class="live-chip">計測中</span>
+          </div>
+          <div class="task-meta">
+            <p class="task-path"></p>
+            <p class="task-status"></p>
+            <p class="task-today"></p>
+            <p class="task-repeat"></p>
+            <p class="task-tags"></p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <label class="task-control">
+            状態
+            <select class="task-status-select"></select>
+          </label>
+          <label class="task-control">
+            繰り返し
+            <select class="task-repeat-select"></select>
+          </label>
+          <div class="buttons task-btns">
+            <button class="start-btn" type="button">開始</button>
+            <button class="stop-btn" type="button">終了</button>
+            <button class="today-btn" type="button">本日対象にする</button>
+            <button class="rename-btn" type="button">名前変更</button>
+            <button class="delete-btn" type="button">削除</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <div id="timeline-modal" class="timeline-modal hidden" role="dialog" aria-modal="true" aria-labelledby="timeline-title">
+      <div class="timeline-modal-backdrop" data-close="1"></div>
+      <section class="timeline-modal-card">
+        <div class="timeline-modal-head">
+          <h2 id="timeline-title">タイムライン</h2>
+          <button id="close-timeline-modal" type="button" class="timeline-close-btn">閉じる</button>
+        </div>
+        <form id="timeline-filter" class="row-form">
+          <div id="timeline-view-toggle" class="timeline-view-toggle">
+            <button type="button" data-view="calendar" class="is-active">カレンダー</button>
+            <button type="button" data-view="list">リスト</button>
+          </div>
+          <div class="timeline-day-nav">
+            <button id="timeline-prev-day" type="button">前日</button>
+            <button id="timeline-today" type="button">今日</button>
+            <button id="timeline-next-day" type="button">翌日</button>
+          </div>
+          <label>
+            対象日
+            <input id="timeline-day-date" type="date" />
+          </label>
+          <input id="timeline-keyword" type="text" placeholder="キーワード（タスク名など）" />
+          <button type="submit">更新</button>
+        </form>
+        <p id="timeline-meta" class="status"></p>
+        <div id="timeline-hover-detail" class="timeline-hover-detail hidden"></div>
+        <div id="timeline-list" class="timeline-list"></div>
+      </section>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
