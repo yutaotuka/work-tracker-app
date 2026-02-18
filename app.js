@@ -10,7 +10,7 @@ const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 60000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
-const APP_VERSION = "v1.0.1+2026-02-18";
+const APP_VERSION_FALLBACK = "v-local+unknown";
 const STATUS_OPTIONS = ["未着手", "着手", "チェック中", "完了", "取り下げ"];
 const REPEAT_OPTIONS = ["none", "daily", "weekly", "monthly"];
 
@@ -95,6 +95,7 @@ initDragDropdownGlobalClose();
 if (applyRecurringResets()) {
   persistState();
 }
+initializeVersionInfo();
 renderAll();
 setInterval(() => {
   renderActiveStatus();
@@ -322,7 +323,53 @@ function renderAll() {
 
 function renderVersionInfo() {
   if (!el.appVersion) return;
-  el.appVersion.textContent = APP_VERSION;
+  if (!el.appVersion.textContent || el.appVersion.textContent === "-") {
+    el.appVersion.textContent = APP_VERSION_FALLBACK;
+  }
+}
+
+async function initializeVersionInfo() {
+  if (!el.appVersion) return;
+  el.appVersion.textContent = "算出中...";
+  try {
+    const [appText, styleText] = await Promise.all([fetchLocalText("./app.js"), fetchLocalText("./style.css")]);
+    const fingerprint = await hashText(`${appText}\n/*style*/\n${styleText}`);
+    const shortHash = fingerprint.slice(0, 8);
+    const releaseDate = resolveVersionDate(document.lastModified);
+    el.appVersion.textContent = `v-${shortHash}+${releaseDate}`;
+  } catch {
+    el.appVersion.textContent = APP_VERSION_FALLBACK;
+  }
+}
+
+async function fetchLocalText(path) {
+  const res = await fetch(path, { cache: "no-cache" });
+  if (!res.ok) {
+    throw new Error(`failed to load ${path}`);
+  }
+  return res.text();
+}
+
+async function hashText(value) {
+  const data = new TextEncoder().encode(value);
+  if (window.crypto && window.crypto.subtle) {
+    const digest = await window.crypto.subtle.digest("SHA-256", data);
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function resolveVersionDate(lastModifiedText) {
+  const parsed = new Date(lastModifiedText);
+  const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
 }
 
 function renderAddSections() {
