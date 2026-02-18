@@ -10,7 +10,7 @@ const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 60000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
-const APP_VERSION_FALLBACK = "v-local+unknown";
+const APP_VERSION_FALLBACK = "1970-01-01 00:00";
 const STATUS_OPTIONS = ["未着手", "着手", "チェック中", "完了", "取り下げ"];
 const REPEAT_OPTIONS = ["none", "daily", "weekly", "monthly"];
 
@@ -323,53 +323,61 @@ function renderAll() {
 
 function renderVersionInfo() {
   if (!el.appVersion) return;
-  if (!el.appVersion.textContent || el.appVersion.textContent === "-") {
+  if (!el.appVersion.textContent || el.appVersion.textContent === "-" || el.appVersion.textContent === "算出中...") {
     el.appVersion.textContent = APP_VERSION_FALLBACK;
   }
 }
 
 async function initializeVersionInfo() {
   if (!el.appVersion) return;
-  el.appVersion.textContent = "算出中...";
-  try {
-    const [appText, styleText] = await Promise.all([fetchLocalText("./app.js"), fetchLocalText("./style.css")]);
-    const fingerprint = await hashText(`${appText}\n/*style*/\n${styleText}`);
-    const shortHash = fingerprint.slice(0, 8);
-    const releaseDate = resolveVersionDate(document.lastModified);
-    el.appVersion.textContent = `v-${shortHash}+${releaseDate}`;
-  } catch {
+  const dates = [];
+  const htmlDate = parseDateSafe(document.lastModified);
+  if (htmlDate) dates.push(htmlDate);
+
+  const assetPaths = ["./app.js", "./style.css", "./manifest.webmanifest", "./service-worker.js", "./icon.svg"];
+  const headerDates = await Promise.all(assetPaths.map((path) => fetchLastModified(path)));
+  headerDates.forEach((d) => {
+    if (d) dates.push(d);
+  });
+
+  if (!dates.length) {
     el.appVersion.textContent = APP_VERSION_FALLBACK;
+    return;
+  }
+
+  const latestTime = Math.max(...dates.map((d) => d.getTime()));
+  const latestDate = new Date(latestTime);
+  el.appVersion.textContent = formatVersionDateTime(latestDate);
+}
+
+async function fetchLastModified(path) {
+  try {
+    const res = await fetch(path, {
+      method: "GET",
+      cache: "no-cache",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!res.ok) return null;
+    return parseDateSafe(res.headers.get("last-modified"));
+  } catch {
+    return null;
   }
 }
 
-async function fetchLocalText(path) {
-  const res = await fetch(path, { cache: "no-cache" });
-  if (!res.ok) {
-    throw new Error(`failed to load ${path}`);
-  }
-  return res.text();
+function parseDateSafe(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
 }
 
-async function hashText(value) {
-  const data = new TextEncoder().encode(value);
-  if (window.crypto && window.crypto.subtle) {
-    const digest = await window.crypto.subtle.digest("SHA-256", data);
-    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function resolveVersionDate(lastModifiedText) {
-  const parsed = new Date(lastModifiedText);
-  const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
+function formatVersionDateTime(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute}`;
 }
 
 function renderAddSections() {
