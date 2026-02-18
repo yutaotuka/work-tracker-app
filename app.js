@@ -680,11 +680,11 @@ function renderSummary() {
   el.summaryNext.disabled = offset >= 0;
   el.summaryReset.disabled = offset === 0;
 
-  renderList(el.summaryTask, taskMap, totalMs);
-  renderList(el.summaryMid, midMap, totalMs);
-  renderList(el.summaryLarge, largeMap, totalMs);
-  renderList(el.summaryTop, topMap, totalMs);
-  renderList(el.summaryTags, tagMap, totalMs);
+  renderList(el.summaryTask, taskMap, totalMs, "task");
+  renderList(el.summaryMid, midMap, totalMs, "mid");
+  renderList(el.summaryLarge, largeMap, totalMs, "large");
+  renderList(el.summaryTop, topMap, totalMs, "top");
+  renderList(el.summaryTags, tagMap, totalMs, "tags");
 }
 
 function renderSummaryTabs() {
@@ -697,7 +697,7 @@ function renderSummaryTabs() {
   });
 }
 
-function renderList(container, map, totalMs) {
+function renderList(container, map, totalMs, sectionKey) {
   const items = [...map.entries()].sort((a, b) => b[1] - a[1]);
   if (!items.length) {
     container.innerHTML = "<li>データなし</li>";
@@ -705,9 +705,10 @@ function renderList(container, map, totalMs) {
   }
 
   const maxMs = items[0][1] || 1;
-  const topItems = items.slice(0, 8);
-  container.innerHTML = items
-    .slice(0, 8)
+  const isExpanded = Boolean(state.summaryExpanded[sectionKey]);
+  const visibleLimit = isExpanded ? items.length : 8;
+  const visibleItems = items.slice(0, visibleLimit);
+  container.innerHTML = visibleItems
     .map(([name, ms]) => {
       const rate = totalMs > 0 ? (ms / totalMs) * 100 : 0;
       const barRate = (ms / maxMs) * 100;
@@ -722,8 +723,18 @@ function renderList(container, map, totalMs) {
     })
     .join("");
 
-  if (items.length > topItems.length) {
-    container.innerHTML += `<li>ほか ${items.length - topItems.length} 件</li>`;
+  if (items.length > 8) {
+    const remaining = items.length - 8;
+    const label = isExpanded ? "折りたたむ" : `ほか ${remaining} 件を表示`;
+    container.innerHTML += `<li class="summary-more-row"><button type="button" class="summary-more-btn" data-summary-expand="${sectionKey}">${label}</button></li>`;
+  }
+
+  const expandBtn = container.querySelector(".summary-more-btn");
+  if (expandBtn) {
+    expandBtn.addEventListener("click", () => {
+      state.summaryExpanded[sectionKey] = !Boolean(state.summaryExpanded[sectionKey]);
+      persistAndRender();
+    });
   }
 }
 
@@ -853,6 +864,7 @@ function replaceState(next) {
   state.taskFilterStatuses = next.taskFilterStatuses;
   state.summaryTab = next.summaryTab;
   state.summaryOffsets = next.summaryOffsets;
+  state.summaryExpanded = next.summaryExpanded;
   state.taskParentOrder = next.taskParentOrder;
   state.uiSelections = next.uiSelections;
   state.archiveView = next.archiveView;
@@ -1726,6 +1738,7 @@ function migrateState(parsed) {
       : [...STATUS_OPTIONS],
     summaryTab: normalizeSummaryTab(parsed.summaryTab),
     summaryOffsets: normalizeSummaryOffsets(parsed.summaryOffsets),
+    summaryExpanded: normalizeSummaryExpanded(parsed.summaryExpanded),
     taskParentOrder: Array.isArray(parsed.taskParentOrder) ? parsed.taskParentOrder : [],
     uiSelections: normalizeUiSelections(parsed.uiSelections),
     archiveView: normalizeArchiveView(parsed.archiveView),
@@ -1793,6 +1806,7 @@ function initialState() {
     taskFilterStatuses: [...STATUS_OPTIONS],
     summaryTab: "task",
     summaryOffsets: { day: 0, week: 0, month: 0 },
+    summaryExpanded: { task: false, mid: false, large: false, top: false, tags: false },
     taskParentOrder: [],
     uiSelections: { largeTopId: "", midLargeId: "", taskParentValue: "" },
     archiveView: { top: false, large: false, parent: false },
@@ -1833,6 +1847,17 @@ function normalizeSummaryOffsets(offsets) {
     day: Number.isFinite(source.day) ? Math.min(0, Math.trunc(source.day)) : 0,
     week: Number.isFinite(source.week) ? Math.min(0, Math.trunc(source.week)) : 0,
     month: Number.isFinite(source.month) ? Math.min(0, Math.trunc(source.month)) : 0,
+  };
+}
+
+function normalizeSummaryExpanded(expanded) {
+  const source = expanded && typeof expanded === "object" ? expanded : {};
+  return {
+    task: Boolean(source.task),
+    mid: Boolean(source.mid),
+    large: Boolean(source.large),
+    top: Boolean(source.top),
+    tags: Boolean(source.tags),
   };
 }
 

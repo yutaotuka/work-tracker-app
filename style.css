@@ -761,6 +761,22 @@ button:disabled {
   font-size: 14px;
 }
 
+.summary-more-row {
+  border-bottom: 0 !important;
+}
+
+.summary-more-btn {
+  background: #fff;
+  color: #0f766e;
+  border: 1px solid #b9ddd6;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.summary-more-btn:hover {
+  background: #effcf9;
+}
+
 .timeline-list {
   border: 1px solid #dce6f2;
   border-radius: 10px;
