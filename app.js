@@ -10,6 +10,7 @@ const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 60000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
+const APP_VERSION = "v1.0.0+2026-02-18";
 const STATUS_OPTIONS = ["未着手", "着手", "チェック中", "完了", "取り下げ"];
 const REPEAT_OPTIONS = ["none", "daily", "weekly", "monthly"];
 
@@ -81,6 +82,7 @@ const el = {
   summaryLarge: document.getElementById("summary-large"),
   summaryTop: document.getElementById("summary-top"),
   summaryTags: document.getElementById("summary-tags"),
+  appVersion: document.getElementById("app-version"),
 };
 
 el.cloudEndpoint.value = localStorage.getItem(CLOUD_ENDPOINT_KEY) || CLOUD_ENDPOINT_DEFAULT;
@@ -304,6 +306,7 @@ function bindEvents() {
 }
 
 function renderAll() {
+  renderVersionInfo();
   renderAddSections();
   renderGroupSelectors();
   renderManualSection();
@@ -315,6 +318,11 @@ function renderAll() {
   renderActiveStatus();
   renderSummary();
   renderSummaryTabs();
+}
+
+function renderVersionInfo() {
+  if (!el.appVersion) return;
+  el.appVersion.textContent = APP_VERSION;
 }
 
 function renderAddSections() {

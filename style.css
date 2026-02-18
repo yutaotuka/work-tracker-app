@@ -77,9 +77,28 @@ body {
   min-width: 0;
 }
 
+.app-version-footer {
+  width: 100%;
+  padding: 0 16px 18px;
+  color: #64748b;
+  font-size: 13px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-version-footer strong {
+  color: #334155;
+}
+
 @media (min-width: 1024px) {
   .layout {
     padding: 20px 24px 28px;
+  }
+
+  .app-version-footer {
+    padding: 0 24px 22px;
   }
 }
 
@@ -1355,6 +1374,11 @@ button:disabled {
 
   .timeline-edit-btn {
     width: 100%;
+  }
+
+  .app-version-footer {
+    justify-content: center;
+    padding: 0 10px 14px;
   }
 }
 
