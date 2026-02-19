@@ -494,6 +494,18 @@ button:disabled {
   align-items: stretch;
 }
 
+.task-row.is-started {
+  border-color: #fdba74;
+  background: linear-gradient(120deg, #fff7ed 0%, #fffdf8 100%);
+  box-shadow: inset 4px 0 0 #f97316;
+}
+
+.task-row.is-checking {
+  border-color: #93c5fd;
+  background: linear-gradient(120deg, #eff6ff 0%, #f8fbff 100%);
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+
 .task-row.is-active {
   border: 2px solid #059669;
   background: linear-gradient(120deg, #ecfdf5 0%, #f7fffc 100%);

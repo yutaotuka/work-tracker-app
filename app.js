@@ -92,7 +92,10 @@ if (!el.manualDate.value) {
 
 bindEvents();
 initDragDropdownGlobalClose();
-if (applyRecurringResets()) {
+const todayCarryChanged = applyTodayTaskCarryOverRules();
+const recurringChangedOnStartup = applyRecurringResets();
+if (todayCarryChanged || recurringChangedOnStartup) {
+  state.lastDataChangeAt = Date.now();
   persistState();
 }
 initializeVersionInfo();
@@ -105,8 +108,9 @@ setInterval(() => {
   }
 }, 1000);
 setInterval(() => {
+  const todayCarryChanged = applyTodayTaskCarryOverRules();
   const recurringChanged = applyRecurringResets();
-  if (recurringChanged) {
+  if (todayCarryChanged || recurringChanged) {
     persistAndRender();
   }
 }, AUTO_RECURRENCE_CHECK_MS);
@@ -575,25 +579,28 @@ function renderTasks() {
     const node = el.taskTpl.content.firstElementChild.cloneNode(true);
     const path = resolveTaskPath(task.id);
     const isActive = Boolean(state.activeSession && state.activeSession.taskId === task.id);
+    const currentStatus = normalizeStatus(task.status);
     node.dataset.taskId = task.id;
     node.draggable = !isActive;
 
     node.querySelector(".task-title").textContent = task.name;
     node.querySelector(".task-path").textContent = `${path.topName} > ${path.largeName} > ${path.midName} > ${task.name}`;
-    node.querySelector(".task-status").textContent = `状態: ${normalizeStatus(task.status)}${isActive ? " (計測中)" : ""}`;
+    node.querySelector(".task-status").textContent = `状態: ${currentStatus}${isActive ? " (計測中)" : ""}`;
     node.querySelector(".task-today").textContent = `本日対象: ${task.isTodayTask ? "はい" : "いいえ"}`;
     node.querySelector(".task-repeat").textContent = `繰り返し: ${formatRecurrenceLabel(task.recurrence)}`;
     node.querySelector(".task-tags").textContent = `タグ: ${(task.tags || []).join(", ") || "なし"}`;
     node.classList.toggle("is-active", isActive);
-    node.classList.toggle("is-completed", normalizeStatus(task.status) === "完了");
-    node.classList.toggle("is-withdrawn", normalizeStatus(task.status) === "取り下げ");
+    node.classList.toggle("is-started", currentStatus === "着手");
+    node.classList.toggle("is-checking", currentStatus === "チェック中");
+    node.classList.toggle("is-completed", currentStatus === "完了");
+    node.classList.toggle("is-withdrawn", currentStatus === "取り下げ");
     node.classList.toggle("is-today-task", Boolean(task.isTodayTask));
 
     const statusSelect = node.querySelector(".task-status-select");
     statusSelect.innerHTML = STATUS_OPTIONS.map(
       (status) => `<option value="${status}">${status}</option>`
     ).join("");
-    statusSelect.value = normalizeStatus(task.status);
+    statusSelect.value = currentStatus;
     statusSelect.addEventListener("change", () => {
       task.status = normalizeStatus(statusSelect.value);
       task.updatedAt = Date.now();
@@ -1749,6 +1756,25 @@ function applyRecurringResets() {
       changed = true;
     }
   });
+  return changed;
+}
+
+function applyTodayTaskCarryOverRules() {
+  const todayKey = getTodayKey();
+  if (state.todayTaskDateKey === todayKey) return false;
+
+  let changed = false;
+  state.tasks.forEach((task) => {
+    if (!task.isTodayTask) return;
+    const status = normalizeStatus(task.status);
+    if (status === "完了" || status === "取り下げ") {
+      task.isTodayTask = false;
+      task.updatedAt = Date.now();
+      changed = true;
+    }
+  });
+
+  state.todayTaskDateKey = todayKey;
   return changed;
 }
 
