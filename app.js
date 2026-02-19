@@ -83,6 +83,7 @@ const el = {
   summaryTop: document.getElementById("summary-top"),
   summaryTags: document.getElementById("summary-tags"),
   appVersion: document.getElementById("app-version"),
+  syncBusyMask: document.getElementById("sync-busy-mask"),
 };
 
 el.cloudEndpoint.value = localStorage.getItem(CLOUD_ENDPOINT_KEY) || CLOUD_ENDPOINT_DEFAULT;
@@ -1091,6 +1092,10 @@ function getCloudEndpoint() {
 function setCloudBusy(isBusy) {
   el.cloudSave.disabled = isBusy;
   el.cloudLoad.disabled = isBusy;
+  document.body.classList.toggle("is-sync-busy", isBusy);
+  if (el.syncBusyMask) {
+    el.syncBusyMask.setAttribute("aria-hidden", String(!isBusy));
+  }
 }
 
 function startCloudAutoSync() {
@@ -2098,8 +2103,17 @@ function mergeStates(base, incoming) {
 
   const baseUpdatedAt = resolveStateUpdatedAt(base);
   const incomingUpdatedAt = resolveStateUpdatedAt(incoming);
-  const mergedActiveSession =
-    incomingUpdatedAt >= baseUpdatedAt ? incoming.activeSession : base.activeSession;
+  let mergedActiveSession = null;
+  if (incomingUpdatedAt > baseUpdatedAt) {
+    mergedActiveSession = incoming.activeSession;
+  } else if (incomingUpdatedAt < baseUpdatedAt) {
+    mergedActiveSession = base.activeSession;
+  } else if (!incoming.activeSession || !base.activeSession) {
+    // If timestamps are equal but either side has already stopped, prefer "stopped".
+    mergedActiveSession = null;
+  } else {
+    mergedActiveSession = incoming.activeSession;
+  }
 
   const merged = {
     ...base,

@@ -26,6 +26,25 @@ body {
   overflow-x: hidden;
 }
 
+.sync-busy-mask {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 1200;
+  background: rgba(241, 245, 249, 0.45);
+  backdrop-filter: blur(1.5px);
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 14px;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+body.is-sync-busy .sync-busy-mask {
+  display: flex;
+}
+
 .header {
   padding: 24px 16px 8px;
   text-align: center;
