@@ -621,7 +621,7 @@ function renderTasks() {
       const nextStatus = normalizeStatus(statusSelect.value);
       task.status = nextStatus;
       task.updatedAt = Date.now();
-      if (isActive && nextStatus === "完了") {
+      if (isActive && (nextStatus === "完了" || nextStatus === "チェック中")) {
         stopTask(task.id, { skipGuard: true });
         return;
       }
