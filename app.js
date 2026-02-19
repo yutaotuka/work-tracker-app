@@ -614,7 +614,7 @@ function renderTasks() {
     ).join("");
     statusSelect.value = currentStatus;
     statusSelect.addEventListener("change", () => {
-      if (!ensureSyncMutable("状態変更")) {
+      if (!isActive && !ensureSyncMutable("状態変更")) {
         statusSelect.value = normalizeStatus(task.status);
         return;
       }
