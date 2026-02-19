@@ -102,6 +102,7 @@ if (todayCarryChanged || recurringChangedOnStartup) {
 initializeVersionInfo();
 renderAll();
 setInterval(() => {
+  checkAndHandleTimedAutoStop();
   renderActiveStatus();
   renderSummary();
   if (!el.timelineModal.classList.contains("hidden")) {
@@ -645,11 +646,21 @@ function renderTasks() {
     });
 
     const startBtn = node.querySelector(".start-btn");
+    const timerStartBtn = node.querySelector(".timer-start-btn");
+    const timerMinutesInput = node.querySelector(".task-timer-minutes");
     const stopBtn = node.querySelector(".stop-btn");
     const todayBtn = node.querySelector(".today-btn");
     const renameBtn = node.querySelector(".rename-btn");
     const deleteBtn = node.querySelector(".delete-btn");
     startBtn.addEventListener("click", () => startTask(task.id));
+    timerStartBtn.addEventListener("click", () => {
+      const minutes = parseInt(timerMinutesInput.value, 10);
+      if (!Number.isFinite(minutes) || minutes <= 0) {
+        alert("タイマー分は1以上で入力してください。");
+        return;
+      }
+      startTaskWithTimer(task.id, minutes);
+    });
     stopBtn.addEventListener("click", () => stopTask(task.id));
     todayBtn.textContent = task.isTodayTask ? "本日対象から外す" : "本日対象にする";
     todayBtn.classList.toggle("is-active", Boolean(task.isTodayTask));
@@ -664,11 +675,15 @@ function renderTasks() {
 
     if (isActive) {
       startBtn.disabled = true;
+      timerStartBtn.disabled = true;
+      timerMinutesInput.disabled = true;
       stopBtn.disabled = false;
       node.querySelector(".task-drag-handle").style.opacity = "0.4";
       node.querySelector(".task-drag-handle").style.cursor = "not-allowed";
     } else {
       startBtn.disabled = Boolean(state.activeSession);
+      timerStartBtn.disabled = Boolean(state.activeSession);
+      timerMinutesInput.disabled = Boolean(state.activeSession);
       stopBtn.disabled = true;
     }
 
@@ -750,7 +765,13 @@ function renderActiveStatus() {
   }
 
   const elapsedMs = Date.now() - state.activeSession.startAt;
-  el.activeStatus.textContent = `稼働中タスク: ${task.name} (${formatDuration(elapsedMs)})`;
+  const hasTimer = Number.isFinite(state.activeSession.autoStopAt);
+  if (!hasTimer) {
+    el.activeStatus.textContent = `稼働中タスク: ${task.name} (${formatDuration(elapsedMs)})`;
+    return;
+  }
+  const remainMs = Math.max(0, state.activeSession.autoStopAt - Date.now());
+  el.activeStatus.textContent = `稼働中タスク: ${task.name} (${formatDuration(elapsedMs)}) / 残り ${formatDuration(remainMs)}`;
 }
 
 function renderSummary() {
@@ -859,7 +880,28 @@ function startTask(taskId) {
     task.status = "着手";
     task.updatedAt = Date.now();
   }
-  state.activeSession = { taskId, startAt: Date.now() };
+  state.activeSession = { taskId, startAt: Date.now(), autoStopAt: null };
+  persistAndRender();
+}
+
+function startTaskWithTimer(taskId, minutes) {
+  if (!ensureSyncMutable("タイマー開始")) return;
+  if (state.activeSession) {
+    alert("同時に開始できるタスクは1つです。稼働中タスクを終了してください。");
+    return;
+  }
+  const durationMinutes = Math.max(1, Math.trunc(minutes));
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (task) {
+    task.status = "着手";
+    task.updatedAt = Date.now();
+  }
+  const startAt = Date.now();
+  state.activeSession = {
+    taskId,
+    startAt,
+    autoStopAt: startAt + durationMinutes * 60000,
+  };
   persistAndRender();
 }
 
@@ -881,6 +923,13 @@ function stopTask(taskId, options = {}) {
   });
   state.activeSession = null;
   persistAndRender("now");
+}
+
+function checkAndHandleTimedAutoStop() {
+  if (!state.activeSession) return;
+  if (!Number.isFinite(state.activeSession.autoStopAt)) return;
+  if (Date.now() < state.activeSession.autoStopAt) return;
+  stopTask(state.activeSession.taskId, { skipGuard: true });
 }
 
 function deleteTask(taskId) {

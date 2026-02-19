@@ -642,6 +642,25 @@ button:disabled {
   min-width: 0;
 }
 
+.task-timer-row {
+  display: flex;
+  gap: 8px;
+}
+
+.task-timer-minutes {
+  width: 110px;
+  min-width: 0;
+}
+
+.timer-start-btn {
+  white-space: nowrap;
+  background: #0f766e;
+}
+
+.timer-start-btn:hover {
+  background: #115e59;
+}
+
 .buttons {
   display: flex;
   gap: 8px;
@@ -1343,6 +1362,12 @@ button:disabled {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+  }
+
+  .task-timer-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
   }
 
   .task-btns button {
