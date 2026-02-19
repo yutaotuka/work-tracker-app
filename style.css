@@ -26,25 +26,6 @@ body {
   overflow-x: hidden;
 }
 
-.sync-busy-mask {
-  position: fixed;
-  inset: 0;
-  display: none;
-  z-index: 1200;
-  background: rgba(241, 245, 249, 0.45);
-  backdrop-filter: blur(1.5px);
-  color: #0f172a;
-  font-weight: 700;
-  font-size: 14px;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-}
-
-body.is-sync-busy .sync-busy-mask {
-  display: flex;
-}
-
 .header {
   padding: 24px 16px 8px;
   text-align: center;
@@ -375,6 +356,23 @@ button:disabled {
   gap: 8px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+}
+
+.sync-status {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #d7e0eb;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.sync-status.is-busy {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 #cloud-endpoint {
@@ -1277,6 +1275,12 @@ button:disabled {
 
   .backup-actions #cloud-endpoint {
     grid-column: 1 / -1;
+  }
+
+  .backup-actions .sync-status {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    text-align: center;
   }
 
   .grid-2 {

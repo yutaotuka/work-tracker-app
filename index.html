@@ -88,6 +88,7 @@
           />
           <button id="cloud-save" type="button">クラウド保存</button>
           <button id="cloud-load" type="button">クラウド読込</button>
+          <span id="sync-status" class="sync-status is-idle">同期: 待機中</span>
           <input id="backup-file" type="file" accept="application/json" hidden />
         </div>
         <div class="row-form">
@@ -249,8 +250,6 @@
       <span>バージョン:</span>
       <strong id="app-version">算出中...</strong>
     </footer>
-
-    <div id="sync-busy-mask" class="sync-busy-mask" aria-hidden="true">クラウド同期中...</div>
 
     <script src="./app.js"></script>
   </body>

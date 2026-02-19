@@ -6,7 +6,7 @@ const CLOUD_ENDPOINT_DEFAULT =
 const AUTO_SAVE_INTERVAL_MS = 15000;
 const AUTO_CLOUD_SAVE_INTERVAL_MS = 300000;
 const AUTO_CLOUD_LOAD_INTERVAL_MS = 600000;
-const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 60000;
+const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 30000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
@@ -83,7 +83,7 @@ const el = {
   summaryTop: document.getElementById("summary-top"),
   summaryTags: document.getElementById("summary-tags"),
   appVersion: document.getElementById("app-version"),
-  syncBusyMask: document.getElementById("sync-busy-mask"),
+  syncStatus: document.getElementById("sync-status"),
 };
 
 el.cloudEndpoint.value = localStorage.getItem(CLOUD_ENDPOINT_KEY) || CLOUD_ENDPOINT_DEFAULT;
@@ -157,6 +157,7 @@ function bindEvents() {
 
   el.topForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!ensureSyncMutable("最上位グループ追加")) return;
     const name = el.topName.value.trim();
     if (!name) return;
     state.topGroups.push({ id: uid(), name, updatedAt: Date.now() });
@@ -166,6 +167,7 @@ function bindEvents() {
 
   el.largeForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!ensureSyncMutable("大グループ追加")) return;
     const topGroupId = state.uiSelections.largeTopId;
     const name = el.largeName.value.trim();
     if (!topGroupId || !name) return;
@@ -176,6 +178,7 @@ function bindEvents() {
 
   el.midForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!ensureSyncMutable("中グループ追加")) return;
     const largeGroupId = state.uiSelections.midLargeId;
     const name = el.midName.value.trim();
     if (!largeGroupId || !name) return;
@@ -186,6 +189,7 @@ function bindEvents() {
 
   el.taskForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!ensureSyncMutable("タスク追加")) return;
     const parent = parseTaskParentValue(state.uiSelections.taskParentValue);
     const name = el.taskName.value.trim();
     const status = normalizeStatus(el.taskStatus.value);
@@ -212,6 +216,7 @@ function bindEvents() {
 
   el.manualForm.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (!ensureSyncMutable("手動工数登録")) return;
     const taskId = el.manualTaskSelect.value;
     const dateText = el.manualDate.value;
     const hours = parseInt(el.manualHours.value, 10);
@@ -439,6 +444,7 @@ function renderGroupSelectors() {
       renderGroupSelectors();
     },
     (orderedValues) => {
+      if (!ensureSyncMutable("最上位グループ並び替え")) return;
       reorderByValues(state.topGroups, orderedValues);
       state.uiSelections.largeTopId = ensureSelection(
         state.uiSelections.largeTopId,
@@ -447,6 +453,7 @@ function renderGroupSelectors() {
       persistAndRender();
     },
     (entityType, entityId) => {
+      if (!ensureSyncMutable("最上位グループアーカイブ切替")) return;
       toggleArchive(entityType, entityId);
       persistAndRender();
     }
@@ -467,6 +474,7 @@ function renderGroupSelectors() {
       renderGroupSelectors();
     },
     (orderedValues) => {
+      if (!ensureSyncMutable("大グループ並び替え")) return;
       reorderByValues(state.largeGroups, orderedValues);
       state.uiSelections.midLargeId = ensureSelection(
         state.uiSelections.midLargeId,
@@ -475,6 +483,7 @@ function renderGroupSelectors() {
       persistAndRender();
     },
     (entityType, entityId) => {
+      if (!ensureSyncMutable("大/中グループアーカイブ切替")) return;
       toggleArchive(entityType, entityId);
       persistAndRender();
     }
@@ -495,10 +504,12 @@ function renderGroupSelectors() {
       renderGroupSelectors();
     },
     (orderedValues) => {
+      if (!ensureSyncMutable("タスク追加ドロップダウン並び替え")) return;
       state.taskParentOrder = orderedValues;
       persistAndRender();
     },
     (entityType, entityId) => {
+      if (!ensureSyncMutable("大/中グループアーカイブ切替")) return;
       toggleArchive(entityType, entityId);
       persistAndRender();
     }
@@ -603,6 +614,10 @@ function renderTasks() {
     ).join("");
     statusSelect.value = currentStatus;
     statusSelect.addEventListener("change", () => {
+      if (!ensureSyncMutable("状態変更")) {
+        statusSelect.value = normalizeStatus(task.status);
+        return;
+      }
       task.status = normalizeStatus(statusSelect.value);
       task.updatedAt = Date.now();
       persistAndRender();
@@ -614,6 +629,10 @@ function renderTasks() {
     ).join("");
     repeatSelect.value = normalizeRecurrence(task.recurrence);
     repeatSelect.addEventListener("change", () => {
+      if (!ensureSyncMutable("繰り返し設定変更")) {
+        repeatSelect.value = normalizeRecurrence(task.recurrence);
+        return;
+      }
       task.recurrence = normalizeRecurrence(repeatSelect.value);
       task.recurrenceResetKey = task.recurrence === "none" ? "" : getRecurrencePeriodKey(task.recurrence);
       task.updatedAt = Date.now();
@@ -630,6 +649,7 @@ function renderTasks() {
     todayBtn.textContent = task.isTodayTask ? "本日対象から外す" : "本日対象にする";
     todayBtn.classList.toggle("is-active", Boolean(task.isTodayTask));
     todayBtn.addEventListener("click", () => {
+      if (!ensureSyncMutable("本日対象の切り替え")) return;
       task.isTodayTask = !task.isTodayTask;
       task.updatedAt = Date.now();
       persistAndRender();
@@ -669,6 +689,7 @@ function renderTasks() {
     node.addEventListener("drop", (e) => {
       e.preventDefault();
       node.classList.remove("drag-over-task");
+      if (!ensureSyncMutable("タスク並び替え")) return;
       if (!draggingTaskId || draggingTaskId === task.id) return;
       const moved = reorderTaskByIds(draggingTaskId, task.id);
       if (moved) {
@@ -823,6 +844,7 @@ function renderList(container, map, totalMs, sectionKey) {
 }
 
 function startTask(taskId) {
+  if (!ensureSyncMutable("開始")) return;
   if (state.activeSession) {
     alert("同時に開始できるタスクは1つです。稼働中タスクを終了してください。");
     return;
@@ -837,6 +859,7 @@ function startTask(taskId) {
 }
 
 function stopTask(taskId) {
+  if (!ensureSyncMutable("終了")) return;
   if (!state.activeSession || state.activeSession.taskId !== taskId) return;
 
   const startAt = state.activeSession.startAt;
@@ -855,6 +878,7 @@ function stopTask(taskId) {
 }
 
 function deleteTask(taskId) {
+  if (!ensureSyncMutable("削除")) return;
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return;
   if (state.activeSession && state.activeSession.taskId === taskId) {
@@ -871,6 +895,7 @@ function deleteTask(taskId) {
 }
 
 function renameTask(taskId) {
+  if (!ensureSyncMutable("名前変更")) return;
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return;
   const nextName = prompt("新しいタスク名を入力してください", task.name);
@@ -1092,10 +1117,17 @@ function getCloudEndpoint() {
 function setCloudBusy(isBusy) {
   el.cloudSave.disabled = isBusy;
   el.cloudLoad.disabled = isBusy;
-  document.body.classList.toggle("is-sync-busy", isBusy);
-  if (el.syncBusyMask) {
-    el.syncBusyMask.setAttribute("aria-hidden", String(!isBusy));
+  if (el.syncStatus) {
+    el.syncStatus.classList.toggle("is-busy", isBusy);
+    el.syncStatus.classList.toggle("is-idle", !isBusy);
+    el.syncStatus.textContent = isBusy ? "同期: 実行中..." : "同期: 待機中";
   }
+}
+
+function ensureSyncMutable(actionLabel = "この操作") {
+  if (!isCloudSyncBusy) return true;
+  alert(`クラウド同期中のため${actionLabel}は少し待ってから実行してください。`);
+  return false;
 }
 
 function startCloudAutoSync() {
@@ -1679,6 +1711,7 @@ function bindTimelineHoverDetail() {
 }
 
 function editSessionTime(sessionId) {
+  if (!ensureSyncMutable("時間修正")) return;
   if (!sessionId) return;
   const session = state.sessions.find((s) => s.id === sessionId);
   if (!session) return;
@@ -1699,6 +1732,7 @@ function editSessionTime(sessionId) {
 }
 
 function deleteSession(sessionId) {
+  if (!ensureSyncMutable("タイムライン削除")) return;
   if (!sessionId) return;
   const session = state.sessions.find((s) => s.id === sessionId);
   if (!session) return;
