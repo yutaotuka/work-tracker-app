@@ -618,8 +618,13 @@ function renderTasks() {
         statusSelect.value = normalizeStatus(task.status);
         return;
       }
-      task.status = normalizeStatus(statusSelect.value);
+      const nextStatus = normalizeStatus(statusSelect.value);
+      task.status = nextStatus;
       task.updatedAt = Date.now();
+      if (isActive && nextStatus === "完了") {
+        stopTask(task.id, { skipGuard: true });
+        return;
+      }
       persistAndRender();
     });
 
@@ -858,8 +863,9 @@ function startTask(taskId) {
   persistAndRender();
 }
 
-function stopTask(taskId) {
-  if (!ensureSyncMutable("終了")) return;
+function stopTask(taskId, options = {}) {
+  const skipGuard = Boolean(options.skipGuard);
+  if (!skipGuard && !ensureSyncMutable("終了")) return;
   if (!state.activeSession || state.activeSession.taskId !== taskId) return;
 
   const startAt = state.activeSession.startAt;
