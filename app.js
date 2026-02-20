@@ -21,6 +21,7 @@ let draggingTaskId = "";
 let cloudSaveDebounceTimer = null;
 let cloudSavePending = false;
 let lastSeenCloudSavedAt = 0;
+let timerAudioCtx = null;
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -887,6 +888,7 @@ function startTaskWithTimer(taskId, minutes) {
     return;
   }
   const durationMinutes = Math.max(1, Math.trunc(minutes));
+  ensureTimerAudioReady();
   const task = state.tasks.find((t) => t.id === taskId);
   if (task) {
     task.status = "着手";
@@ -925,7 +927,77 @@ function checkAndHandleTimedAutoStop() {
   if (!state.activeSession) return;
   if (!Number.isFinite(state.activeSession.autoStopAt)) return;
   if (Date.now() < state.activeSession.autoStopAt) return;
+  playTimerFinishedSound();
   stopTask(state.activeSession.taskId, { skipGuard: true });
+}
+
+function ensureTimerAudioReady() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!timerAudioCtx) {
+      timerAudioCtx = new AudioContextClass();
+    }
+    if (timerAudioCtx.state === "suspended") {
+      timerAudioCtx.resume().catch(() => {});
+    }
+  } catch {
+    // Ignore audio initialization failures.
+  }
+}
+
+function playTimerFinishedSound() {
+  ensureTimerAudioReady();
+  triggerTimerVibration();
+  if (!timerAudioCtx) return;
+  try {
+    const now = timerAudioCtx.currentTime;
+    playNotificationChime(now, 1.0);
+  } catch {
+    // Ignore audio playback failures.
+  }
+}
+
+function playNotificationChime(startTime, volumeScale = 1) {
+  playChimeTone(startTime, 880, 0.16, 0.14 * volumeScale);
+  playChimeTone(startTime + 0.18, 1174.66, 0.16, 0.13 * volumeScale);
+  playChimeTone(startTime + 0.38, 1567.98, 0.22, 0.12 * volumeScale);
+}
+
+function playChimeTone(startTime, frequency, duration, gainValue) {
+  if (!timerAudioCtx) return;
+  const mainOsc = timerAudioCtx.createOscillator();
+  const harmOsc = timerAudioCtx.createOscillator();
+  const gain = timerAudioCtx.createGain();
+
+  mainOsc.type = "triangle";
+  harmOsc.type = "sine";
+  mainOsc.frequency.setValueAtTime(frequency, startTime);
+  harmOsc.frequency.setValueAtTime(frequency * 2, startTime);
+
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(gainValue, startTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(gainValue * 0.45, startTime + 0.07);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  mainOsc.connect(gain);
+  harmOsc.connect(gain);
+  gain.connect(timerAudioCtx.destination);
+
+  mainOsc.start(startTime);
+  harmOsc.start(startTime);
+  mainOsc.stop(startTime + duration + 0.03);
+  harmOsc.stop(startTime + duration + 0.03);
+}
+
+function triggerTimerVibration() {
+  try {
+    if ("vibrate" in navigator) {
+      navigator.vibrate([180, 90, 180]);
+    }
+  } catch {
+    // Ignore vibration failures.
+  }
 }
 
 function deleteTask(taskId) {
