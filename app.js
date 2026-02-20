@@ -2056,7 +2056,7 @@ function persistAndRender(cloudMode = "queued") {
 function persistQuickChange() {
   state.lastDataChangeAt = Date.now();
   persistState();
-  queueCloudSave(1200);
+  queueCloudSave(600);
   scheduleRenderAll(160);
 }
 
@@ -2090,7 +2090,7 @@ async function flushQueuedCloudSave() {
   if (!cloudSavePending) return;
   const endpoint = el.cloudEndpoint.value.trim();
   if (!endpoint) {
-    cloudSavePending = false;
+    cloudSavePending = true;
     return;
   }
   if (isCloudSyncBusy) {
@@ -2104,12 +2104,13 @@ async function flushQueuedCloudSave() {
   try {
     await cloudSaveRequest(endpoint);
   } catch {
-    // Silent failure for background queued sync.
+    // Keep pending flag so unsynced changes are retried automatically.
+    cloudSavePending = true;
   } finally {
     isCloudSyncBusy = false;
     setCloudBusy(false);
     if (cloudSavePending) {
-      queueCloudSave(500);
+      queueCloudSave(2000);
     }
   }
 }
