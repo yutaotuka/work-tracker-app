@@ -22,6 +22,7 @@ let cloudSaveDebounceTimer = null;
 let cloudSavePending = false;
 let lastSeenCloudSavedAt = 0;
 let timerAudioCtx = null;
+let renderDebounceTimer = null;
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -623,7 +624,7 @@ function renderTasks() {
         stopTask(task.id, { skipGuard: true });
         return;
       }
-      persistAndRender();
+      persistQuickChange();
     });
 
     const repeatSelect = node.querySelector(".task-repeat-select");
@@ -635,7 +636,7 @@ function renderTasks() {
       task.recurrence = normalizeRecurrence(repeatSelect.value);
       task.recurrenceResetKey = task.recurrence === "none" ? "" : getRecurrencePeriodKey(task.recurrence);
       task.updatedAt = Date.now();
-      persistAndRender();
+      persistQuickChange();
     });
 
     const startBtn = node.querySelector(".start-btn");
@@ -661,7 +662,7 @@ function renderTasks() {
     todayBtn.addEventListener("click", () => {
       task.isTodayTask = !task.isTodayTask;
       task.updatedAt = Date.now();
-      persistAndRender();
+      persistQuickChange();
     });
     renameBtn.addEventListener("click", () => renameTask(task.id));
     deleteBtn.addEventListener("click", () => deleteTask(task.id));
@@ -2052,9 +2053,26 @@ function persistAndRender(cloudMode = "queued") {
   }
 }
 
+function persistQuickChange() {
+  state.lastDataChangeAt = Date.now();
+  persistState();
+  queueCloudSave(1200);
+  scheduleRenderAll(160);
+}
+
 function persistUiAndRender() {
   persistState();
   renderAll();
+}
+
+function scheduleRenderAll(delayMs = 160) {
+  if (renderDebounceTimer) {
+    clearTimeout(renderDebounceTimer);
+  }
+  renderDebounceTimer = setTimeout(() => {
+    renderDebounceTimer = null;
+    renderAll();
+  }, Math.max(0, delayMs));
 }
 
 function queueCloudSave(delayMs = 1200) {
