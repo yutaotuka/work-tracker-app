@@ -621,7 +621,7 @@ function renderTasks() {
       task.status = nextStatus;
       task.updatedAt = Date.now();
       if (isActive && (nextStatus === "完了" || nextStatus === "チェック中")) {
-        stopTask(task.id, { skipGuard: true });
+        stopTask(task.id, { skipGuard: true, preserveStatus: nextStatus });
         return;
       }
       persistQuickChange();
@@ -906,6 +906,10 @@ function startTaskWithTimer(taskId, minutes) {
 
 function stopTask(taskId, options = {}) {
   const skipGuard = Boolean(options.skipGuard);
+  const preserveStatus =
+    options && typeof options.preserveStatus === "string"
+      ? normalizeStatus(options.preserveStatus)
+      : "";
   if (!skipGuard && !ensureSyncMutable("終了")) return;
   if (!state.activeSession || state.activeSession.taskId !== taskId) return;
 
@@ -920,6 +924,13 @@ function stopTask(taskId, options = {}) {
     snapshot,
     updatedAt: Date.now(),
   });
+  if (preserveStatus) {
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (task) {
+      task.status = preserveStatus;
+      task.updatedAt = Date.now();
+    }
+  }
   state.activeSession = null;
   persistAndRender("now");
 }
