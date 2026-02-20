@@ -642,9 +642,40 @@ button:disabled {
   min-width: 0;
 }
 
+.task-timer-details {
+  border: 1px dashed #cfd9e4;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #f8fbff;
+}
+
+.task-timer-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  list-style: none;
+}
+
+.task-timer-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-timer-details summary::after {
+  content: "▼";
+  float: right;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.task-timer-details[open] summary::after {
+  content: "▲";
+}
+
 .task-timer-row {
   display: flex;
   gap: 8px;
+  margin-top: 8px;
 }
 
 .task-timer-minutes {
@@ -654,11 +685,11 @@ button:disabled {
 
 .timer-start-btn {
   white-space: nowrap;
-  background: #0f766e;
+  background: #1f2937;
 }
 
 .timer-start-btn:hover {
-  background: #115e59;
+  background: #111827;
 }
 
 .buttons {

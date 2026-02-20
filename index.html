@@ -205,10 +205,13 @@
             繰り返し
             <select class="task-repeat-select"></select>
           </label>
-          <div class="task-timer-row">
-            <input class="task-timer-minutes" type="number" min="1" step="1" value="15" />
-            <button class="timer-start-btn" type="button">タイマー開始</button>
-          </div>
+          <details class="task-timer-details">
+            <summary>タイマー設定</summary>
+            <div class="task-timer-row">
+              <input class="task-timer-minutes" type="number" min="1" step="1" value="15" />
+              <button class="timer-start-btn" type="button">タイマーで開始</button>
+            </div>
+          </details>
           <div class="buttons task-btns">
             <button class="start-btn" type="button">開始</button>
             <button class="stop-btn" type="button">終了</button>

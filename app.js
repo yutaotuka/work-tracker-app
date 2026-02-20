@@ -638,6 +638,7 @@ function renderTasks() {
     });
 
     const startBtn = node.querySelector(".start-btn");
+    const timerDetails = node.querySelector(".task-timer-details");
     const timerStartBtn = node.querySelector(".timer-start-btn");
     const timerMinutesInput = node.querySelector(".task-timer-minutes");
     const stopBtn = node.querySelector(".stop-btn");
@@ -668,6 +669,7 @@ function renderTasks() {
       startBtn.disabled = true;
       timerStartBtn.disabled = true;
       timerMinutesInput.disabled = true;
+      timerDetails.removeAttribute("open");
       stopBtn.disabled = false;
       node.querySelector(".task-drag-handle").style.opacity = "0.4";
       node.querySelector(".task-drag-handle").style.cursor = "not-allowed";
@@ -675,6 +677,9 @@ function renderTasks() {
       startBtn.disabled = Boolean(state.activeSession);
       timerStartBtn.disabled = Boolean(state.activeSession);
       timerMinutesInput.disabled = Boolean(state.activeSession);
+      if (state.activeSession) {
+        timerDetails.removeAttribute("open");
+      }
       stopBtn.disabled = true;
     }
 
