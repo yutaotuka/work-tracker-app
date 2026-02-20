@@ -615,10 +615,6 @@ function renderTasks() {
     ).join("");
     statusSelect.value = currentStatus;
     statusSelect.addEventListener("change", () => {
-      if (!isActive && !ensureSyncMutable("状態変更")) {
-        statusSelect.value = normalizeStatus(task.status);
-        return;
-      }
       const nextStatus = normalizeStatus(statusSelect.value);
       task.status = nextStatus;
       task.updatedAt = Date.now();
@@ -635,10 +631,6 @@ function renderTasks() {
     ).join("");
     repeatSelect.value = normalizeRecurrence(task.recurrence);
     repeatSelect.addEventListener("change", () => {
-      if (!ensureSyncMutable("繰り返し設定変更")) {
-        repeatSelect.value = normalizeRecurrence(task.recurrence);
-        return;
-      }
       task.recurrence = normalizeRecurrence(repeatSelect.value);
       task.recurrenceResetKey = task.recurrence === "none" ? "" : getRecurrencePeriodKey(task.recurrence);
       task.updatedAt = Date.now();
@@ -665,7 +657,6 @@ function renderTasks() {
     todayBtn.textContent = task.isTodayTask ? "本日対象から外す" : "本日対象にする";
     todayBtn.classList.toggle("is-active", Boolean(task.isTodayTask));
     todayBtn.addEventListener("click", () => {
-      if (!ensureSyncMutable("本日対象の切り替え")) return;
       task.isTodayTask = !task.isTodayTask;
       task.updatedAt = Date.now();
       persistAndRender();
