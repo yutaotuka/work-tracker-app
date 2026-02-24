@@ -8,6 +8,7 @@ const AUTO_SAVE_INTERVAL_MS = 15000;
 const AUTO_CLOUD_SAVE_INTERVAL_MS = 300000;
 const AUTO_CLOUD_LOAD_INTERVAL_MS = 600000;
 const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 90000;
+const AUTO_CLOUD_APPLY_COOLDOWN_MS = 3000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
@@ -30,6 +31,7 @@ let renderDebounceTimer = null;
 let syncUiLockActive = false;
 let lastLifecycleSyncAt = 0;
 let syncJournal = loadSyncJournal();
+let lastLocalMutationAt = 0;
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -1359,6 +1361,7 @@ async function autoCloudCheckForRemoteUpdate() {
 async function autoCloudLoadPeriodic() {
   const endpoint = el.cloudEndpoint.value.trim();
   if (!endpoint || isCloudSyncBusy) return;
+  const loadStartedLocalMutationAt = lastLocalMutationAt;
 
   isCloudSyncBusy = true;
   setCloudBusy(true);
@@ -1378,6 +1381,8 @@ async function autoCloudLoadPeriodic() {
     if (state.activeSession && !merged.activeSession) {
       merged.activeSession = state.activeSession;
     }
+    if (lastLocalMutationAt !== loadStartedLocalMutationAt) return;
+    if (Date.now() - lastLocalMutationAt < AUTO_CLOUD_APPLY_COOLDOWN_MS) return;
     const localSerialized = JSON.stringify(local);
     const mergedSerialized = JSON.stringify(merged);
     if (localSerialized === mergedSerialized) return;
@@ -2094,6 +2099,7 @@ function registerServiceWorker() {
 
 function persistAndRender(cloudMode = "queued") {
   state.lastDataChangeAt = Date.now();
+  lastLocalMutationAt = state.lastDataChangeAt;
   appendSyncJournal("change");
   persistState();
   renderAll();
@@ -2108,6 +2114,7 @@ function persistAndRender(cloudMode = "queued") {
 
 function persistQuickChange() {
   state.lastDataChangeAt = Date.now();
+  lastLocalMutationAt = state.lastDataChangeAt;
   appendSyncJournal("quick-change");
   persistState();
   queueCloudSave(CLOUD_BATCH_QUICK_DELAY_MS);
