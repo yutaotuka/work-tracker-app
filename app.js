@@ -1158,7 +1158,12 @@ async function cloudSave() {
   isCloudSyncBusy = true;
   setCloudBusy(true, { uiLock: true });
   try {
-    await cloudSaveRequest(endpoint);
+    const saveToken = lastLocalMutationAt;
+    const snapshot = migrateState(state);
+    const result = await cloudSaveRequest(endpoint, snapshot, saveToken);
+    if (result && result.hadLocalChangeDuringSave) {
+      queueCloudSave(0);
+    }
     alert("クラウド保存が完了しました。");
   } catch (error) {
     alert(error.message || "クラウド保存に失敗しました。");
@@ -1200,8 +1205,8 @@ async function cloudLoad() {
   }
 }
 
-async function cloudSaveRequest(endpoint) {
-  const mergedData = await mergeStateWithCloud(endpoint, state);
+async function cloudSaveRequest(endpoint, localSnapshot = state, expectedMutationAt = lastLocalMutationAt) {
+  const mergedData = await mergeStateWithCloud(endpoint, localSnapshot);
   if (!mergedData) {
     throw new Error("クラウド読込に失敗したため、上書き事故防止のため保存を中止しました。");
   }
@@ -1222,11 +1227,14 @@ async function cloudSaveRequest(endpoint) {
     throw new Error(parsed.message || "クラウド保存に失敗しました。");
   }
   lastSeenCloudSavedAt = Math.max(lastSeenCloudSavedAt, savedAt);
-  replaceState(migrateState(mergedData));
-  persistState();
-  cloudSavePending = false;
-  clearSyncJournal();
-  return parsed;
+  const hadLocalChangeDuringSave = lastLocalMutationAt !== expectedMutationAt;
+  if (!hadLocalChangeDuringSave) {
+    replaceState(migrateState(mergedData));
+    persistState();
+    cloudSavePending = false;
+    clearSyncJournal();
+  }
+  return { parsed, hadLocalChangeDuringSave };
 }
 
 async function cloudLoadRequest(endpoint) {
@@ -2205,12 +2213,16 @@ async function flushQueuedCloudSave() {
     return;
   }
 
+  const saveToken = lastLocalMutationAt;
+  const snapshot = migrateState(state);
   cloudSavePending = false;
   isCloudSyncBusy = true;
   setCloudBusy(true);
   try {
-    await cloudSaveRequest(endpoint);
-    clearSyncJournal();
+    const result = await cloudSaveRequest(endpoint, snapshot, saveToken);
+    if (result && result.hadLocalChangeDuringSave) {
+      cloudSavePending = true;
+    }
   } catch {
     // Keep pending flag so unsynced changes are retried automatically.
     cloudSavePending = true;
