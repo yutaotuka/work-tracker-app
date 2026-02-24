@@ -86,6 +86,7 @@ const el = {
   summaryTags: document.getElementById("summary-tags"),
   appVersion: document.getElementById("app-version"),
   syncStatus: document.getElementById("sync-status"),
+  syncModalOverlay: document.getElementById("sync-modal-overlay"),
 };
 
 el.cloudEndpoint.value = localStorage.getItem(CLOUD_ENDPOINT_KEY) || CLOUD_ENDPOINT_DEFAULT;
@@ -1256,6 +1257,10 @@ function setCloudBusy(isBusy) {
     el.syncStatus.classList.toggle("is-busy", isBusy);
     el.syncStatus.classList.toggle("is-idle", !isBusy);
     el.syncStatus.textContent = isBusy ? "同期: 実行中..." : "同期: 待機中";
+  }
+  if (el.syncModalOverlay) {
+    el.syncModalOverlay.classList.toggle("hidden", !isBusy);
+    el.syncModalOverlay.setAttribute("aria-hidden", String(!isBusy));
   }
 }
 
