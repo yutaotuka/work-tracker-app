@@ -403,12 +403,6 @@ button:disabled {
   color: #1d4ed8;
 }
 
-.sync-status.is-pending {
-  border-color: #fcd34d;
-  background: #fffbeb;
-  color: #92400e;
-}
-
 #cloud-endpoint {
   min-width: 280px;
 }

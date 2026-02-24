@@ -1,23 +1,18 @@
 const STORAGE_KEY = "work-tracker-data-v1";
 const STORAGE_RECOVERY_KEY = "work-tracker-data-v1-recovery";
 const CLOUD_ENDPOINT_KEY = "work-tracker-cloud-endpoint";
-const SYNC_JOURNAL_KEY = "work-tracker-sync-journal-v1";
 const CLOUD_ENDPOINT_DEFAULT =
   "https://script.google.com/macros/s/AKfycbxJZtFGoBFuRPcW-EdD9WMaOE716tFNJFHWYQQY0-hHPzOJOUPZ5pM0SezJye9xf6GmJg/exec";
 const AUTO_SAVE_INTERVAL_MS = 15000;
 const AUTO_CLOUD_SAVE_INTERVAL_MS = 300000;
 const AUTO_CLOUD_LOAD_INTERVAL_MS = 600000;
-const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 90000;
-const AUTO_CLOUD_APPLY_COOLDOWN_MS = 3000;
+const AUTO_CLOUD_LATEST_CHECK_INTERVAL_MS = 60000;
 const AUTO_RECURRENCE_CHECK_MS = 60000;
 const TIMELINE_MIN_EVENT_HEIGHT = 18;
 const SPREADSHEET_ID = "1ggWSLbaj5vFMmkcJP4EWAUxQusQ12m8jpWmta0-lmDg";
 const APP_VERSION_FALLBACK = "1970-01-01 00:00";
 const STATUS_OPTIONS = ["未着手", "着手", "チェック中", "完了", "取り下げ"];
 const REPEAT_OPTIONS = ["none", "daily", "weekly", "monthly"];
-const MAX_SYNC_JOURNAL_ENTRIES = 300;
-const CLOUD_BATCH_DELAY_MS = 2200;
-const CLOUD_BATCH_QUICK_DELAY_MS = 1200;
 
 const state = loadState();
 let isCloudSyncBusy = false;
@@ -28,10 +23,6 @@ let cloudSavePending = false;
 let lastSeenCloudSavedAt = 0;
 let timerAudioCtx = null;
 let renderDebounceTimer = null;
-let syncUiLockActive = false;
-let lastLifecycleSyncAt = 0;
-let syncJournal = loadSyncJournal();
-let lastLocalMutationAt = 0;
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -113,9 +104,6 @@ if (todayCarryChanged || recurringChangedOnStartup) {
 }
 initializeVersionInfo();
 renderAll();
-if (syncJournal.length > 0) {
-  queueCloudSave(1000);
-}
 setInterval(() => {
   checkAndHandleTimedAutoStop();
   renderActiveStatus();
@@ -260,7 +248,7 @@ function bindEvents() {
     addManualSession(taskId, startAt, endAt);
     el.manualHours.value = "0";
     el.manualMinutes.value = "0";
-    persistAndRender("now");
+    persistAndRender();
   });
   el.manualToggle.addEventListener("click", () => {
     state.manualCollapsed = !state.manualCollapsed;
@@ -310,18 +298,11 @@ function bindEvents() {
   el.cloudSave.addEventListener("click", cloudSave);
   el.cloudLoad.addEventListener("click", cloudLoad);
 
-  window.addEventListener("pagehide", () => {
-    persistState();
-    triggerLifecycleImmediateSync();
-  });
-  window.addEventListener("beforeunload", () => {
-    persistState();
-    triggerLifecycleImmediateSync();
-  });
+  window.addEventListener("pagehide", persistState);
+  window.addEventListener("beforeunload", persistState);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       persistState();
-      triggerLifecycleImmediateSync();
       return;
     }
     autoCloudCheckForRemoteUpdate();
@@ -644,7 +625,7 @@ function renderTasks() {
         stopTask(task.id, { skipGuard: true, preserveStatus: nextStatus });
         return;
       }
-      persistAndRender("now");
+      persistQuickChange();
     });
 
     const repeatSelect = node.querySelector(".task-repeat-select");
@@ -899,7 +880,7 @@ function startTask(taskId) {
     task.updatedAt = Date.now();
   }
   state.activeSession = { taskId, startAt: Date.now(), autoStopAt: null };
-  persistAndRender("now");
+  persistAndRender();
 }
 
 function startTaskWithTimer(taskId, minutes) {
@@ -921,7 +902,7 @@ function startTaskWithTimer(taskId, minutes) {
     startAt,
     autoStopAt: startAt + durationMinutes * 60000,
   };
-  persistAndRender("now");
+  persistAndRender();
 }
 
 function stopTask(taskId, options = {}) {
@@ -1046,7 +1027,7 @@ function deleteTask(taskId) {
   if (!state.deletedTaskIds.includes(taskId)) {
     state.deletedTaskIds.push(taskId);
   }
-  persistAndRender("now");
+  persistAndRender();
 }
 
 function renameTask(taskId) {
@@ -1156,20 +1137,15 @@ async function cloudSave() {
   if (!endpoint) return;
 
   isCloudSyncBusy = true;
-  setCloudBusy(true, { uiLock: true });
+  setCloudBusy(true);
   try {
-    const saveToken = lastLocalMutationAt;
-    const snapshot = migrateState(state);
-    const result = await cloudSaveRequest(endpoint, snapshot, saveToken);
-    if (result && result.hadLocalChangeDuringSave) {
-      queueCloudSave(0);
-    }
+    await cloudSaveRequest(endpoint);
     alert("クラウド保存が完了しました。");
   } catch (error) {
     alert(error.message || "クラウド保存に失敗しました。");
   } finally {
     isCloudSyncBusy = false;
-    setCloudBusy(false, { uiLock: true });
+    setCloudBusy(false);
   }
 }
 
@@ -1179,7 +1155,7 @@ async function cloudLoad() {
   if (!endpoint) return;
 
   isCloudSyncBusy = true;
-  setCloudBusy(true, { uiLock: true });
+  setCloudBusy(true);
   try {
     const parsed = await cloudLoadRequest(endpoint);
     if (!parsed.data) {
@@ -1194,19 +1170,17 @@ async function cloudLoad() {
     const ok = confirm("クラウドデータで現在データを上書きしますか？");
     if (!ok) return;
     replaceState(migrated);
-    cloudSavePending = false;
-    clearSyncJournal();
     persistUiAndRender();
   } catch (error) {
     alert(error.message || "クラウド読込に失敗しました。");
   } finally {
     isCloudSyncBusy = false;
-    setCloudBusy(false, { uiLock: true });
+    setCloudBusy(false);
   }
 }
 
-async function cloudSaveRequest(endpoint, localSnapshot = state, expectedMutationAt = lastLocalMutationAt) {
-  const mergedData = await mergeStateWithCloud(endpoint, localSnapshot);
+async function cloudSaveRequest(endpoint) {
+  const mergedData = await mergeStateWithCloud(endpoint, state);
   if (!mergedData) {
     throw new Error("クラウド読込に失敗したため、上書き事故防止のため保存を中止しました。");
   }
@@ -1227,14 +1201,9 @@ async function cloudSaveRequest(endpoint, localSnapshot = state, expectedMutatio
     throw new Error(parsed.message || "クラウド保存に失敗しました。");
   }
   lastSeenCloudSavedAt = Math.max(lastSeenCloudSavedAt, savedAt);
-  const hadLocalChangeDuringSave = lastLocalMutationAt !== expectedMutationAt;
-  if (!hadLocalChangeDuringSave) {
-    replaceState(migrateState(mergedData));
-    persistState();
-    cloudSavePending = false;
-    clearSyncJournal();
-  }
-  return { parsed, hadLocalChangeDuringSave };
+  replaceState(migrateState(mergedData));
+  persistState();
+  return parsed;
 }
 
 async function cloudLoadRequest(endpoint) {
@@ -1281,37 +1250,22 @@ function getCloudEndpoint() {
   return endpoint;
 }
 
-function setCloudBusy(isBusy, options = {}) {
-  const uiLock = Boolean(options.uiLock);
+function setCloudBusy(isBusy) {
   el.cloudSave.disabled = isBusy;
   el.cloudLoad.disabled = isBusy;
-  if (isBusy && uiLock) {
-    syncUiLockActive = true;
-  }
-  if (!isBusy && uiLock) {
-    syncUiLockActive = false;
-  }
   if (el.syncStatus) {
     el.syncStatus.classList.toggle("is-busy", isBusy);
-    el.syncStatus.classList.toggle("is-pending", !isBusy && (cloudSavePending || syncJournal.length > 0));
     el.syncStatus.classList.toggle("is-idle", !isBusy);
-    if (isBusy) {
-      el.syncStatus.textContent = "同期: 実行中...";
-    } else if (syncJournal.length > 0 || cloudSavePending) {
-      el.syncStatus.textContent = `同期: 未送信 ${syncJournal.length}件`;
-    } else {
-      el.syncStatus.textContent = "同期: 待機中";
-    }
+    el.syncStatus.textContent = isBusy ? "同期: 実行中..." : "同期: 待機中";
   }
   if (el.syncModalOverlay) {
-    const showModal = Boolean(isBusy && uiLock);
-    el.syncModalOverlay.classList.toggle("hidden", !showModal);
-    el.syncModalOverlay.setAttribute("aria-hidden", String(!showModal));
+    el.syncModalOverlay.classList.toggle("hidden", !isBusy);
+    el.syncModalOverlay.setAttribute("aria-hidden", String(!isBusy));
   }
 }
 
 function ensureSyncMutable(actionLabel = "この操作") {
-  if (!syncUiLockActive) return true;
+  if (!isCloudSyncBusy) return true;
   alert(`クラウド同期中のため${actionLabel}は少し待ってから実行してください。`);
   return false;
 }
@@ -1369,7 +1323,6 @@ async function autoCloudCheckForRemoteUpdate() {
 async function autoCloudLoadPeriodic() {
   const endpoint = el.cloudEndpoint.value.trim();
   if (!endpoint || isCloudSyncBusy) return;
-  const loadStartedLocalMutationAt = lastLocalMutationAt;
 
   isCloudSyncBusy = true;
   setCloudBusy(true);
@@ -1389,8 +1342,6 @@ async function autoCloudLoadPeriodic() {
     if (state.activeSession && !merged.activeSession) {
       merged.activeSession = state.activeSession;
     }
-    if (lastLocalMutationAt !== loadStartedLocalMutationAt) return;
-    if (Date.now() - lastLocalMutationAt < AUTO_CLOUD_APPLY_COOLDOWN_MS) return;
     const localSerialized = JSON.stringify(local);
     const mergedSerialized = JSON.stringify(merged);
     if (localSerialized === mergedSerialized) return;
@@ -1917,7 +1868,7 @@ function editSessionTime(sessionId) {
   session.startAt = nextStart;
   session.endAt = nextEnd;
   session.updatedAt = Date.now();
-  persistAndRender("now");
+  persistAndRender();
 }
 
 function deleteSession(sessionId) {
@@ -1931,7 +1882,7 @@ function deleteSession(sessionId) {
   if (!state.deletedSessionIds.includes(sessionId)) {
     state.deletedSessionIds.push(sessionId);
   }
-  persistAndRender("now");
+  persistAndRender();
 }
 
 function parseTags(input) {
@@ -2107,8 +2058,6 @@ function registerServiceWorker() {
 
 function persistAndRender(cloudMode = "queued") {
   state.lastDataChangeAt = Date.now();
-  lastLocalMutationAt = state.lastDataChangeAt;
-  appendSyncJournal("change");
   persistState();
   renderAll();
   if (cloudMode === "now") {
@@ -2116,16 +2065,14 @@ function persistAndRender(cloudMode = "queued") {
     return;
   }
   if (cloudMode === "queued") {
-    queueCloudSave(CLOUD_BATCH_DELAY_MS);
+    queueCloudSave(1200);
   }
 }
 
 function persistQuickChange() {
   state.lastDataChangeAt = Date.now();
-  lastLocalMutationAt = state.lastDataChangeAt;
-  appendSyncJournal("quick-change");
   persistState();
-  queueCloudSave(CLOUD_BATCH_QUICK_DELAY_MS);
+  queueCloudSave(600);
   scheduleRenderAll(160);
 }
 
@@ -2144,53 +2091,8 @@ function scheduleRenderAll(delayMs = 160) {
   }, Math.max(0, delayMs));
 }
 
-function hasUnsyncedChanges() {
-  return syncJournal.length > 0 || cloudSavePending;
-}
-
-function triggerLifecycleImmediateSync() {
-  if (!hasUnsyncedChanges()) return;
-  const endpoint = el.cloudEndpoint.value.trim();
-  if (!endpoint) return;
-  if (isCloudSyncBusy) return;
-  const now = Date.now();
-  if (now - lastLifecycleSyncAt < 1200) return;
-  lastLifecycleSyncAt = now;
-
-  const payload = {
-    action: "save",
-    sheetId: SPREADSHEET_ID,
-    savedAt: resolveStateUpdatedAt(state),
-    data: state,
-  };
-  const body = JSON.stringify(payload);
-  let sent = false;
-
-  try {
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: "application/json" });
-      sent = navigator.sendBeacon(endpoint, blob);
-    }
-  } catch {
-    sent = false;
-  }
-
-  if (!sent) {
-    fetch(endpoint, {
-      method: "POST",
-      body,
-      keepalive: true,
-    }).catch(() => {});
-  }
-
-  queueCloudSave(0);
-}
-
-function queueCloudSave(delayMs = CLOUD_BATCH_DELAY_MS) {
+function queueCloudSave(delayMs = 1200) {
   cloudSavePending = true;
-  if (!isCloudSyncBusy) {
-    setCloudBusy(false);
-  }
   if (cloudSaveDebounceTimer) {
     clearTimeout(cloudSaveDebounceTimer);
   }
@@ -2205,7 +2107,6 @@ async function flushQueuedCloudSave() {
   const endpoint = el.cloudEndpoint.value.trim();
   if (!endpoint) {
     cloudSavePending = true;
-    setCloudBusy(false);
     return;
   }
   if (isCloudSyncBusy) {
@@ -2213,24 +2114,14 @@ async function flushQueuedCloudSave() {
     return;
   }
 
-  const saveToken = lastLocalMutationAt;
-  const snapshot = migrateState(state);
   cloudSavePending = false;
   isCloudSyncBusy = true;
   setCloudBusy(true);
   try {
-    const result = await cloudSaveRequest(endpoint, snapshot, saveToken);
-    if (result && result.hadLocalChangeDuringSave) {
-      cloudSavePending = true;
-    }
+    await cloudSaveRequest(endpoint);
   } catch {
     // Keep pending flag so unsynced changes are retried automatically.
     cloudSavePending = true;
-    if (el.syncStatus) {
-      el.syncStatus.classList.add("is-busy");
-      el.syncStatus.classList.remove("is-idle");
-      el.syncStatus.textContent = "同期: 失敗。再試行中...";
-    }
   } finally {
     isCloudSyncBusy = false;
     setCloudBusy(false);
@@ -2810,50 +2701,6 @@ function readPersistCandidate(key) {
     return { savedAt: 0, data: parsed };
   } catch {
     return null;
-  }
-}
-
-function loadSyncJournal() {
-  const raw = localStorage.getItem(SYNC_JOURNAL_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((entry) => entry && typeof entry === "object")
-      .map((entry) => ({
-        id: typeof entry.id === "string" ? entry.id : uid(),
-        reason: typeof entry.reason === "string" ? entry.reason : "change",
-        ts: Number.isFinite(entry.ts) ? entry.ts : Date.now(),
-      }))
-      .slice(-MAX_SYNC_JOURNAL_ENTRIES);
-  } catch {
-    return [];
-  }
-}
-
-function persistSyncJournal() {
-  try {
-    localStorage.setItem(SYNC_JOURNAL_KEY, JSON.stringify(syncJournal.slice(-MAX_SYNC_JOURNAL_ENTRIES)));
-  } catch {
-    // Ignore localStorage write failures.
-  }
-}
-
-function appendSyncJournal(reason = "change") {
-  syncJournal.push({ id: uid(), reason, ts: Date.now() });
-  if (syncJournal.length > MAX_SYNC_JOURNAL_ENTRIES) {
-    syncJournal = syncJournal.slice(-MAX_SYNC_JOURNAL_ENTRIES);
-  }
-  persistSyncJournal();
-}
-
-function clearSyncJournal() {
-  if (!syncJournal.length) return;
-  syncJournal = [];
-  persistSyncJournal();
-  if (!isCloudSyncBusy) {
-    setCloudBusy(false);
   }
 }
 
