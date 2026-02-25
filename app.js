@@ -26,6 +26,7 @@ let timerAudioCtx = null;
 let renderDebounceTimer = null;
 let syncUiLockActive = false;
 let lastLocalMutationAt = 0;
+let lastLifecycleSyncAt = 0;
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -301,11 +302,18 @@ function bindEvents() {
   el.cloudSave.addEventListener("click", cloudSave);
   el.cloudLoad.addEventListener("click", cloudLoad);
 
-  window.addEventListener("pagehide", persistState);
-  window.addEventListener("beforeunload", persistState);
+  window.addEventListener("pagehide", () => {
+    persistState();
+    triggerLifecycleImmediateSync();
+  });
+  window.addEventListener("beforeunload", () => {
+    persistState();
+    triggerLifecycleImmediateSync();
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       persistState();
+      triggerLifecycleImmediateSync();
       return;
     }
     autoCloudCheckForRemoteUpdate();
@@ -2114,6 +2122,50 @@ function scheduleRenderAll(delayMs = 160) {
     renderDebounceTimer = null;
     renderAll();
   }, Math.max(0, delayMs));
+}
+
+function hasUnsyncedChanges() {
+  if (cloudSavePending) return true;
+  const localStamp = resolveStateUpdatedAt(state);
+  return localStamp > lastSeenCloudSavedAt;
+}
+
+function triggerLifecycleImmediateSync() {
+  if (!hasUnsyncedChanges()) return;
+  const endpoint = el.cloudEndpoint.value.trim();
+  if (!endpoint) return;
+  if (isCloudSyncBusy) return;
+  const now = Date.now();
+  if (now - lastLifecycleSyncAt < 1200) return;
+  lastLifecycleSyncAt = now;
+
+  const payload = {
+    action: "save",
+    sheetId: SPREADSHEET_ID,
+    savedAt: resolveStateUpdatedAt(state),
+    data: state,
+  };
+  const body = JSON.stringify(payload);
+  let sent = false;
+
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: "application/json" });
+      sent = navigator.sendBeacon(endpoint, blob);
+    }
+  } catch {
+    sent = false;
+  }
+
+  if (!sent) {
+    fetch(endpoint, {
+      method: "POST",
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  queueCloudSave(0);
 }
 
 function queueCloudSave(delayMs = 1200) {

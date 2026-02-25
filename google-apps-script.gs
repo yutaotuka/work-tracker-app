@@ -59,7 +59,18 @@ function doPost(e) {
 
     const sheetId = body.sheetId || TARGET_SHEET_ID;
     const sheet = getOrCreateSheet(sheetId);
-    const savedAt = body.savedAt || Date.now();
+    const incomingSavedAt = Number(body.savedAt) || Date.now();
+    const latestRow = getLatestDataRow(sheet);
+    const latestSavedAt = latestRow ? Number(sheet.getRange(latestRow, 2).getValue()) || 0 : 0;
+    if (latestSavedAt > 0 && incomingSavedAt < latestSavedAt) {
+      return jsonOut({
+        ok: false,
+        conflict: true,
+        latestSavedAt,
+        message: "Stale write rejected",
+      });
+    }
+    const savedAt = incomingSavedAt;
     const json = JSON.stringify(body.data || {});
 
     const writeRow = getNextWriteRow(sheet);
