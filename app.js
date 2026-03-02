@@ -2046,8 +2046,8 @@ function getRangeBounds(range, nowMs, offset = 0) {
   if (range === "day") {
     start.setHours(0, 0, 0, 0);
     start.setDate(start.getDate() + offset);
+    end.setTime(start.getTime());
     end.setDate(start.getDate() + 1);
-    end.setHours(0, 0, 0, 0);
     return { start: start.getTime(), end: end.getTime() };
   }
 
