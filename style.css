@@ -1262,16 +1262,19 @@ button:disabled {
   gap: 8px;
   align-items: baseline;
   margin-bottom: 5px;
+  user-select: text;
 }
 
 .summary-item-name {
   font-weight: 600;
+  user-select: text;
 }
 
 .summary-item-value {
   color: #0f766e;
   font-weight: 700;
   white-space: nowrap;
+  user-select: text;
 }
 
 .summary-bar {
