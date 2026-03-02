@@ -865,7 +865,7 @@ function renderList(container, map, totalMs, sectionKey) {
       const barRate = (ms / maxMs) * 100;
       return `<li>
         <div class="summary-item-head">
-          <span class="summary-item-name">${escapeHtml(name)}</span>
+          <input class="summary-item-name" type="text" readonly value="${escapeHtml(name)}" />
           <span class="summary-item-value">${formatDuration(ms)}</span>
         </div>
         <div class="summary-bar"><div class="summary-bar-fill" style="width:${barRate.toFixed(1)}%"></div></div>

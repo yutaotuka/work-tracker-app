@@ -1266,8 +1266,18 @@ button:disabled {
 }
 
 .summary-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
   font-weight: 600;
+  line-height: 1.4;
   user-select: text;
+  -webkit-user-select: text;
 }
 
 .summary-item-value {
@@ -1275,6 +1285,12 @@ button:disabled {
   font-weight: 700;
   white-space: nowrap;
   user-select: text;
+}
+
+.summary-item-name:focus {
+  outline: 1px solid #bfd5ee;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .summary-bar {
