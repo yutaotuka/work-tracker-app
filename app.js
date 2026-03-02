@@ -607,6 +607,7 @@ function renderTasks() {
     const path = resolveTaskPath(task.id);
     const isActive = Boolean(state.activeSession && state.activeSession.taskId === task.id);
     const currentStatus = normalizeStatus(task.status);
+    const isCollapsed = Boolean(state.taskCollapsed && state.taskCollapsed[task.id]);
     node.dataset.taskId = task.id;
     node.draggable = !isActive;
 
@@ -622,6 +623,15 @@ function renderTasks() {
     node.classList.toggle("is-completed", currentStatus === "完了");
     node.classList.toggle("is-withdrawn", currentStatus === "取り下げ");
     node.classList.toggle("is-today-task", Boolean(task.isTodayTask));
+    node.classList.toggle("is-collapsed", isCollapsed);
+
+    const collapseBtn = node.querySelector(".task-collapse-btn");
+    collapseBtn.textContent = isCollapsed ? "展開する" : "折りたたむ";
+    collapseBtn.setAttribute("aria-expanded", String(!isCollapsed));
+    collapseBtn.addEventListener("click", () => {
+      state.taskCollapsed[task.id] = !Boolean(state.taskCollapsed[task.id]);
+      persistUiAndRender();
+    });
 
     const statusSelect = node.querySelector(".task-status-select");
     statusSelect.innerHTML = STATUS_OPTIONS.map(
@@ -1136,6 +1146,7 @@ function replaceState(next) {
   state.taskMidFilterValue = next.taskMidFilterValue;
   state.taskTodayFilterValue = next.taskTodayFilterValue;
   state.todayTaskDateKey = next.todayTaskDateKey;
+  state.taskCollapsed = next.taskCollapsed;
   state.manualCollapsed = next.manualCollapsed;
   state.timelineView = next.timelineView;
   state.addSectionsCollapsed = next.addSectionsCollapsed;
@@ -2272,6 +2283,7 @@ function migrateState(parsed) {
       typeof parsed.todayTaskDateKey === "string" && parsed.todayTaskDateKey
         ? parsed.todayTaskDateKey
         : getTodayKey(),
+    taskCollapsed: normalizeTaskCollapsed(parsed.taskCollapsed),
     manualCollapsed: typeof parsed.manualCollapsed === "boolean" ? parsed.manualCollapsed : true,
     timelineView: normalizeTimelineView(parsed.timelineView),
     addSectionsCollapsed:
@@ -2341,6 +2353,7 @@ function initialState() {
     taskMidFilterValue: "all",
     taskTodayFilterValue: "all",
     todayTaskDateKey: getTodayKey(),
+    taskCollapsed: {},
     manualCollapsed: true,
     timelineView: "calendar",
     addSectionsCollapsed: false,
@@ -2406,6 +2419,7 @@ function mergeStates(base, incoming) {
     archiveView: incoming.archiveView || base.archiveView,
     taskFilterStatuses: incoming.taskFilterStatuses || base.taskFilterStatuses,
     taskParentOrder: incoming.taskParentOrder || base.taskParentOrder,
+    taskCollapsed: incoming.taskCollapsed || base.taskCollapsed,
     lastDataChangeAt: Math.max(resolveStateUpdatedAt(base), resolveStateUpdatedAt(incoming)),
   };
 
@@ -2429,6 +2443,13 @@ function mergeEntities(baseList, incomingList) {
     byId.set(item.id, nextStamp >= currentStamp ? item : current);
   });
   return [...byId.values()];
+}
+
+function normalizeTaskCollapsed(value) {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(([key, collapsed]) => typeof key === "string" && typeof collapsed === "boolean")
+  );
 }
 
 function uniqueStrings(values) {

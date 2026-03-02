@@ -182,42 +182,47 @@
 
     <template id="task-row-template">
       <article class="task-row">
-        <div class="task-main">
+        <div class="task-row-head">
           <div class="task-title-row">
             <span class="task-drag-handle" title="ドラッグして並び替え">≡</span>
             <strong class="task-title"></strong>
             <span class="live-chip">計測中</span>
           </div>
-          <div class="task-meta">
-            <p class="task-path"></p>
-            <p class="task-status"></p>
-            <p class="task-today"></p>
-            <p class="task-repeat"></p>
-            <p class="task-tags"></p>
-          </div>
+          <button class="task-collapse-btn" type="button" aria-expanded="true">折りたたむ</button>
         </div>
-        <div class="task-actions">
-          <label class="task-control">
-            状態
-            <select class="task-status-select"></select>
-          </label>
-          <label class="task-control">
-            繰り返し
-            <select class="task-repeat-select"></select>
-          </label>
-          <details class="task-timer-details">
-            <summary>タイマー設定</summary>
-            <div class="task-timer-row">
-              <input class="task-timer-minutes" type="number" min="1" step="1" value="15" />
-              <button class="timer-start-btn" type="button">タイマーで開始</button>
+        <div class="task-row-body">
+          <div class="task-main">
+            <div class="task-meta">
+              <p class="task-path"></p>
+              <p class="task-status"></p>
+              <p class="task-today"></p>
+              <p class="task-repeat"></p>
+              <p class="task-tags"></p>
             </div>
-          </details>
-          <div class="buttons task-btns">
-            <button class="start-btn" type="button">開始</button>
-            <button class="stop-btn" type="button">終了</button>
-            <button class="today-btn" type="button">本日対象にする</button>
-            <button class="rename-btn" type="button">名前変更</button>
-            <button class="delete-btn" type="button">削除</button>
+          </div>
+          <div class="task-actions">
+            <label class="task-control">
+              状態
+              <select class="task-status-select"></select>
+            </label>
+            <label class="task-control">
+              繰り返し
+              <select class="task-repeat-select"></select>
+            </label>
+            <details class="task-timer-details">
+              <summary>タイマー設定</summary>
+              <div class="task-timer-row">
+                <input class="task-timer-minutes" type="number" min="1" step="1" value="15" />
+                <button class="timer-start-btn" type="button">タイマーで開始</button>
+              </div>
+            </details>
+            <div class="buttons task-btns">
+              <button class="start-btn" type="button">開始</button>
+              <button class="stop-btn" type="button">終了</button>
+              <button class="today-btn" type="button">本日対象にする</button>
+              <button class="rename-btn" type="button">名前変更</button>
+              <button class="delete-btn" type="button">削除</button>
+            </div>
           </div>
         </div>
       </article>
