@@ -176,9 +176,10 @@ function bindEvents() {
   el.largeForm.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!ensureSyncMutable("大グループ追加")) return;
-    const topGroupId = state.uiSelections.largeTopId;
+    const topGroupId = getCurrentDropdownValue(el.largeTopSelect, state.uiSelections.largeTopId);
     const name = el.largeName.value.trim();
     if (!topGroupId || !name) return;
+    state.uiSelections.largeTopId = topGroupId;
     state.largeGroups.push({ id: uid(), name, topGroupId, updatedAt: Date.now() });
     el.largeName.value = "";
     persistAndRender();
@@ -187,9 +188,10 @@ function bindEvents() {
   el.midForm.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!ensureSyncMutable("中グループ追加")) return;
-    const largeGroupId = state.uiSelections.midLargeId;
+    const largeGroupId = getCurrentDropdownValue(el.midLargeSelect, state.uiSelections.midLargeId);
     const name = el.midName.value.trim();
     if (!largeGroupId || !name) return;
+    state.uiSelections.midLargeId = largeGroupId;
     state.midGroups.push({ id: uid(), name, largeGroupId, updatedAt: Date.now() });
     el.midName.value = "";
     persistAndRender();
@@ -198,11 +200,16 @@ function bindEvents() {
   el.taskForm.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!ensureSyncMutable("タスク追加")) return;
-    const parent = parseTaskParentValue(state.uiSelections.taskParentValue);
+    const selectedParentValue = getCurrentDropdownValue(
+      el.taskMidSelect,
+      state.uiSelections.taskParentValue
+    );
+    const parent = parseTaskParentValue(selectedParentValue);
     const name = el.taskName.value.trim();
     const status = normalizeStatus(el.taskStatus.value);
     const tags = parseTags(el.taskTags.value);
     if (!parent || !name) return;
+    state.uiSelections.taskParentValue = selectedParentValue;
     state.tasks.push({
       id: uid(),
       name,
@@ -2650,6 +2657,7 @@ function renderDragDropdown(
 ) {
   const visible = filterArchivedOptions(options, showArchived);
   if (!visible.length) {
+    container.dataset.selectedValue = "";
     const help = options.some((item) => item.archived)
       ? `<button type="button" class="dd-archive-toggle">${showArchived ? "アーカイブを隠す" : "アーカイブを表示"}</button>`
       : "";
@@ -2665,6 +2673,7 @@ function renderDragDropdown(
   }
 
   const selected = visible.find((item) => item.value === selectedValue) || visible[0];
+  container.dataset.selectedValue = selected.value;
   container.innerHTML = `
     <button type="button" class="dd-trigger">
       <span class="dd-value">${escapeHtml(selected.label)}</span>
@@ -2742,6 +2751,11 @@ function renderDragDropdown(
       onToggleShowArchived();
     });
   }
+}
+
+function getCurrentDropdownValue(container, fallback = "") {
+  if (!container) return fallback;
+  return container.dataset.selectedValue || fallback;
 }
 
 function moveValueInArray(values, fromValue, toValue) {
