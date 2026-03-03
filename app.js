@@ -339,18 +339,10 @@ function bindEvents() {
     persistUiAndRender();
   });
   el.collapseAllTasks.addEventListener("click", () => {
-    const visibleIds = getFilteredTasks().map((task) => task.id);
-    visibleIds.forEach((id) => {
-      state.taskCollapsed[id] = true;
-    });
-    persistUiAndRender();
+    setVisibleTasksCollapsed(true);
   });
   el.expandAllTasks.addEventListener("click", () => {
-    const visibleIds = getFilteredTasks().map((task) => task.id);
-    visibleIds.forEach((id) => {
-      state.taskCollapsed[id] = false;
-    });
-    persistUiAndRender();
+    setVisibleTasksCollapsed(false);
   });
 }
 
@@ -2772,6 +2764,19 @@ function renderDragDropdown(
 function getCurrentDropdownValue(container, fallback = "") {
   if (!container) return fallback;
   return container.dataset.selectedValue || fallback;
+}
+
+function setVisibleTasksCollapsed(collapsed) {
+  if (!state.taskCollapsed || typeof state.taskCollapsed !== "object") {
+    state.taskCollapsed = {};
+  }
+  const visibleIds = [...el.taskList.querySelectorAll(".task-row[data-task-id]")]
+    .map((node) => node.dataset.taskId)
+    .filter(Boolean);
+  visibleIds.forEach((id) => {
+    state.taskCollapsed[id] = collapsed;
+  });
+  persistUiAndRender();
 }
 
 function moveValueInArray(values, fromValue, toValue) {
