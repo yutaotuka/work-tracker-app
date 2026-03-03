@@ -386,6 +386,30 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.task-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.task-list-bulk-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-list-bulk-actions button {
+  background: #fff;
+  color: #334155;
+  border: 1px solid #cfd9e4;
+}
+
+.task-list-bulk-actions button:hover {
+  background: #edf4fb;
+}
+
 .sync-status {
   margin-left: auto;
   font-size: 12px;

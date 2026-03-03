@@ -76,7 +76,13 @@
       </div>
 
       <section id="task-list-card" class="card">
-        <h2>タスク一覧</h2>
+        <div class="task-list-head">
+          <h2>タスク一覧</h2>
+          <div class="task-list-bulk-actions">
+            <button id="collapse-all-tasks" type="button">すべて折りたたむ</button>
+            <button id="expand-all-tasks" type="button">すべて展開</button>
+          </div>
+        </div>
         <div class="backup-actions">
           <button id="backup-export" type="button">JSON保存</button>
           <button id="backup-import" type="button">JSON読込</button>

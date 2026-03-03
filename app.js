@@ -72,6 +72,8 @@ const el = {
   backupFile: document.getElementById("backup-file"),
   taskLargeFilter: document.getElementById("task-large-filter"),
   taskMidFilter: document.getElementById("task-mid-filter"),
+  collapseAllTasks: document.getElementById("collapse-all-tasks"),
+  expandAllTasks: document.getElementById("expand-all-tasks"),
   statusFilter: document.getElementById("status-filter"),
   taskList: document.getElementById("task-list"),
   taskTpl: document.getElementById("task-row-template"),
@@ -334,6 +336,20 @@ function bindEvents() {
   });
   el.taskMidFilter.addEventListener("change", () => {
     state.taskMidFilterValue = el.taskMidFilter.value;
+    persistUiAndRender();
+  });
+  el.collapseAllTasks.addEventListener("click", () => {
+    const visibleIds = getFilteredTasks().map((task) => task.id);
+    visibleIds.forEach((id) => {
+      state.taskCollapsed[id] = true;
+    });
+    persistUiAndRender();
+  });
+  el.expandAllTasks.addEventListener("click", () => {
+    const visibleIds = getFilteredTasks().map((task) => task.id);
+    visibleIds.forEach((id) => {
+      state.taskCollapsed[id] = false;
+    });
     persistUiAndRender();
   });
 }
