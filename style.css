@@ -578,9 +578,14 @@ button:disabled {
 
 .task-collapsed-actions {
   display: none;
-  gap: 8px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(241, 245, 249, 0.95);
+  border: 1px solid #dbe4ee;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .task-row.is-started {
@@ -654,6 +659,10 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.task-title {
+  line-height: 1.25;
+}
+
 .task-meta {
   display: grid;
   gap: 5px;
@@ -665,6 +674,9 @@ button:disabled {
   background: #fff;
   color: #475569;
   border: 1px solid #d7e0ea;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .task-collapse-btn:hover {
@@ -726,6 +738,54 @@ button:disabled {
 
 .task-row.is-collapsed .task-collapse-btn {
   align-self: flex-start;
+}
+
+.start-btn-compact,
+.stop-btn-compact,
+.today-btn-compact {
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.start-btn-compact {
+  background: #0f766e;
+}
+
+.start-btn-compact:hover {
+  background: #0b5e58;
+}
+
+.stop-btn-compact {
+  background: #e59a9a;
+}
+
+.stop-btn-compact:hover {
+  background: #d98585;
+}
+
+.today-btn-compact {
+  background: #fff;
+  color: #8a5a00;
+  border: 1px solid #f4c78f;
+}
+
+.today-btn-compact:hover {
+  background: #fff7ed;
+}
+
+.today-btn-compact.is-active {
+  background: #f59e0b;
+  color: #fff;
+  border-color: #f59e0b;
+}
+
+.task-row.is-collapsed .live-chip {
+  margin-left: 0;
 }
 
 .task-control {
