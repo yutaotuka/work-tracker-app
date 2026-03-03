@@ -687,7 +687,28 @@ function renderTasks() {
     const compactTodayBtn = node.querySelector(".today-btn-compact");
     const renameBtn = node.querySelector(".rename-btn");
     const deleteBtn = node.querySelector(".delete-btn");
-    [startBtn, compactStartBtn].forEach((button) => {
+    const allStartButtons = [startBtn, compactStartBtn];
+    const allStopButtons = [stopBtn, compactStopBtn];
+    const allTodayButtons = [todayBtn, compactTodayBtn];
+
+    const syncTodayButtons = () => {
+      allTodayButtons.forEach((button) => {
+        button.textContent = task.isTodayTask ? "本日対象から外す" : "本日対象にする";
+        button.classList.toggle("is-active", Boolean(task.isTodayTask));
+      });
+    };
+    const syncActionButtons = () => {
+      const hasOtherActiveSession = Boolean(state.activeSession && !isActive);
+      allStartButtons.forEach((button) => {
+        button.disabled = isActive || hasOtherActiveSession;
+      });
+      allStopButtons.forEach((button) => {
+        button.disabled = !isActive;
+      });
+      syncTodayButtons();
+    };
+
+    allStartButtons.forEach((button) => {
       button.addEventListener("click", () => startTask(task.id));
     });
     timerStartBtn.addEventListener("click", () => {
@@ -698,15 +719,14 @@ function renderTasks() {
       }
       startTaskWithTimer(task.id, minutes);
     });
-    [stopBtn, compactStopBtn].forEach((button) => {
+    allStopButtons.forEach((button) => {
       button.addEventListener("click", () => stopTask(task.id));
     });
-    [todayBtn, compactTodayBtn].forEach((button) => {
-      button.textContent = task.isTodayTask ? "本日対象から外す" : "本日対象にする";
-      button.classList.toggle("is-active", Boolean(task.isTodayTask));
+    allTodayButtons.forEach((button) => {
       button.addEventListener("click", () => {
         task.isTodayTask = !task.isTodayTask;
         task.updatedAt = Date.now();
+        syncTodayButtons();
         persistQuickChange();
       });
     });
@@ -714,26 +734,19 @@ function renderTasks() {
     deleteBtn.addEventListener("click", () => deleteTask(task.id));
 
     if (isActive) {
-      startBtn.disabled = true;
-      compactStartBtn.disabled = true;
       timerStartBtn.disabled = true;
       timerMinutesInput.disabled = true;
       timerDetails.removeAttribute("open");
-      stopBtn.disabled = false;
-      compactStopBtn.disabled = false;
       node.querySelector(".task-drag-handle").style.opacity = "0.4";
       node.querySelector(".task-drag-handle").style.cursor = "not-allowed";
     } else {
-      startBtn.disabled = Boolean(state.activeSession);
-      compactStartBtn.disabled = Boolean(state.activeSession);
       timerStartBtn.disabled = Boolean(state.activeSession);
       timerMinutesInput.disabled = Boolean(state.activeSession);
       if (state.activeSession) {
         timerDetails.removeAttribute("open");
       }
-      stopBtn.disabled = true;
-      compactStopBtn.disabled = true;
     }
+    syncActionButtons();
 
     node.addEventListener("dragstart", () => {
       draggingTaskId = task.id;

@@ -580,6 +580,7 @@ button:disabled {
   display: none;
   gap: 8px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .task-row.is-started {
@@ -649,6 +650,8 @@ button:disabled {
   gap: 6px;
   margin-bottom: 0;
   min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
 }
 
 .task-meta {
@@ -719,6 +722,10 @@ button:disabled {
 
 .task-row.is-collapsed .task-collapsed-actions {
   display: flex;
+}
+
+.task-row.is-collapsed .task-collapse-btn {
+  align-self: flex-start;
 }
 
 .task-control {
