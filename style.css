@@ -576,6 +576,12 @@ button:disabled {
   align-items: stretch;
 }
 
+.task-collapsed-actions {
+  display: none;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .task-row.is-started {
   border-color: #fdba74;
   background: linear-gradient(120deg, #fff7ed 0%, #fffdf8 100%);
@@ -709,6 +715,10 @@ button:disabled {
 
 .task-row.is-collapsed .task-row-body {
   display: none;
+}
+
+.task-row.is-collapsed .task-collapsed-actions {
+  display: flex;
 }
 
 .task-control {

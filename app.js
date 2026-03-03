@@ -676,15 +676,20 @@ function renderTasks() {
       persistQuickChange();
     });
 
-    const startBtn = node.querySelector(".start-btn");
+    const startBtn = node.querySelector(".start-btn:not(.start-btn-compact)");
+    const compactStartBtn = node.querySelector(".start-btn-compact");
     const timerDetails = node.querySelector(".task-timer-details");
     const timerStartBtn = node.querySelector(".timer-start-btn");
     const timerMinutesInput = node.querySelector(".task-timer-minutes");
-    const stopBtn = node.querySelector(".stop-btn");
-    const todayBtn = node.querySelector(".today-btn");
+    const stopBtn = node.querySelector(".stop-btn:not(.stop-btn-compact)");
+    const compactStopBtn = node.querySelector(".stop-btn-compact");
+    const todayBtn = node.querySelector(".today-btn:not(.today-btn-compact)");
+    const compactTodayBtn = node.querySelector(".today-btn-compact");
     const renameBtn = node.querySelector(".rename-btn");
     const deleteBtn = node.querySelector(".delete-btn");
-    startBtn.addEventListener("click", () => startTask(task.id));
+    [startBtn, compactStartBtn].forEach((button) => {
+      button.addEventListener("click", () => startTask(task.id));
+    });
     timerStartBtn.addEventListener("click", () => {
       const minutes = parseInt(timerMinutesInput.value, 10);
       if (!Number.isFinite(minutes) || minutes <= 0) {
@@ -693,33 +698,41 @@ function renderTasks() {
       }
       startTaskWithTimer(task.id, minutes);
     });
-    stopBtn.addEventListener("click", () => stopTask(task.id));
-    todayBtn.textContent = task.isTodayTask ? "本日対象から外す" : "本日対象にする";
-    todayBtn.classList.toggle("is-active", Boolean(task.isTodayTask));
-    todayBtn.addEventListener("click", () => {
-      task.isTodayTask = !task.isTodayTask;
-      task.updatedAt = Date.now();
-      persistQuickChange();
+    [stopBtn, compactStopBtn].forEach((button) => {
+      button.addEventListener("click", () => stopTask(task.id));
+    });
+    [todayBtn, compactTodayBtn].forEach((button) => {
+      button.textContent = task.isTodayTask ? "本日対象から外す" : "本日対象にする";
+      button.classList.toggle("is-active", Boolean(task.isTodayTask));
+      button.addEventListener("click", () => {
+        task.isTodayTask = !task.isTodayTask;
+        task.updatedAt = Date.now();
+        persistQuickChange();
+      });
     });
     renameBtn.addEventListener("click", () => renameTask(task.id));
     deleteBtn.addEventListener("click", () => deleteTask(task.id));
 
     if (isActive) {
       startBtn.disabled = true;
+      compactStartBtn.disabled = true;
       timerStartBtn.disabled = true;
       timerMinutesInput.disabled = true;
       timerDetails.removeAttribute("open");
       stopBtn.disabled = false;
+      compactStopBtn.disabled = false;
       node.querySelector(".task-drag-handle").style.opacity = "0.4";
       node.querySelector(".task-drag-handle").style.cursor = "not-allowed";
     } else {
       startBtn.disabled = Boolean(state.activeSession);
+      compactStartBtn.disabled = Boolean(state.activeSession);
       timerStartBtn.disabled = Boolean(state.activeSession);
       timerMinutesInput.disabled = Boolean(state.activeSession);
       if (state.activeSession) {
         timerDetails.removeAttribute("open");
       }
       stopBtn.disabled = true;
+      compactStopBtn.disabled = true;
     }
 
     node.addEventListener("dragstart", () => {
