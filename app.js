@@ -70,6 +70,7 @@ const el = {
   cloudSave: document.getElementById("cloud-save"),
   cloudLoad: document.getElementById("cloud-load"),
   backupFile: document.getElementById("backup-file"),
+  taskTopFilter: document.getElementById("task-top-filter"),
   taskLargeFilter: document.getElementById("task-large-filter"),
   taskMidFilter: document.getElementById("task-mid-filter"),
   collapseAllTasks: document.getElementById("collapse-all-tasks"),
@@ -330,6 +331,10 @@ function bindEvents() {
   window.addEventListener("focus", () => {
     autoCloudCheckForRemoteUpdate();
   });
+  el.taskTopFilter.addEventListener("change", () => {
+    state.taskTopFilterValue = el.taskTopFilter.value;
+    persistUiAndRender();
+  });
   el.taskLargeFilter.addEventListener("change", () => {
     state.taskLargeFilterValue = el.taskLargeFilter.value;
     persistUiAndRender();
@@ -352,6 +357,7 @@ function renderAll() {
   renderGroupSelectors();
   renderManualSection();
   renderManualTaskOptions();
+  renderTaskTopFilter();
   renderTaskLargeFilter();
   renderTaskMidFilter();
   renderStatusFilter();
@@ -795,6 +801,15 @@ function renderTaskMidFilter() {
   el.taskMidFilter.value = state.taskMidFilterValue;
 }
 
+function renderTaskTopFilter() {
+  const options = getTaskTopFilterOptions();
+  state.taskTopFilterValue = ensureSelection(state.taskTopFilterValue, options);
+  el.taskTopFilter.innerHTML = options
+    .map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
+    .join("");
+  el.taskTopFilter.value = state.taskTopFilterValue;
+}
+
 function renderTaskLargeFilter() {
   const options = getTaskLargeFilterOptions();
   state.taskLargeFilterValue = ensureSelection(state.taskLargeFilterValue, options);
@@ -1183,6 +1198,7 @@ function replaceState(next) {
   state.taskParentOrder = next.taskParentOrder;
   state.uiSelections = next.uiSelections;
   state.archiveView = next.archiveView;
+  state.taskTopFilterValue = next.taskTopFilterValue;
   state.taskLargeFilterValue = next.taskLargeFilterValue;
   state.taskMidFilterValue = next.taskMidFilterValue;
   state.taskTodayFilterValue = next.taskTodayFilterValue;
@@ -1564,6 +1580,7 @@ function renderManualTaskOptions() {
 
 function getFilteredTasks() {
   const visibleStatuses = new Set(state.taskFilterStatuses);
+  const selectedTop = state.taskTopFilterValue || "all";
   const selectedLarge = state.taskLargeFilterValue || "all";
   const selectedMid = state.taskMidFilterValue || "all";
   const todayOnly = state.taskTodayFilterValue === "today";
@@ -1572,10 +1589,36 @@ function getFilteredTasks() {
     if (task.id === activeTaskId) return true;
     if (!visibleStatuses.has(normalizeStatus(task.status))) return false;
     if (todayOnly && !task.isTodayTask) return false;
+    if (selectedTop !== "all" && getTaskTopFilterKey(task) !== selectedTop) return false;
     if (selectedLarge !== "all" && getTaskLargeFilterKey(task) !== selectedLarge) return false;
     if (selectedMid === "all") return true;
     return getTaskMidFilterKey(task) === selectedMid;
   });
+}
+
+function getTaskTopFilterOptions() {
+  const map = new Map();
+  map.set("all", { value: "all", label: "すべて" });
+  state.tasks.forEach((task) => {
+    if (isTaskInArchivedHierarchy(task)) return;
+    const key = getTaskTopFilterKey(task);
+    if (!map.has(key)) {
+      map.set(key, { value: key, label: getTaskTopFilterLabel(task) });
+    }
+  });
+  return [...map.values()];
+}
+
+function getTaskTopFilterKey(task) {
+  const path = resolveTaskPath(task.id);
+  if (path.topName === "(削除済み最上位グループ)") return "top:unknown";
+  return `top:${path.topName}`;
+}
+
+function getTaskTopFilterLabel(task) {
+  const path = resolveTaskPath(task.id);
+  if (path.topName === "(削除済み最上位グループ)") return "(削除済み最上位グループ)";
+  return path.topName;
 }
 
 function getTaskLargeFilterOptions() {
@@ -2328,6 +2371,8 @@ function migrateState(parsed) {
     taskParentOrder: Array.isArray(parsed.taskParentOrder) ? parsed.taskParentOrder : [],
     uiSelections: normalizeUiSelections(parsed.uiSelections),
     archiveView: normalizeArchiveView(parsed.archiveView),
+    taskTopFilterValue:
+      typeof parsed.taskTopFilterValue === "string" ? parsed.taskTopFilterValue : "all",
     taskLargeFilterValue:
       typeof parsed.taskLargeFilterValue === "string" ? parsed.taskLargeFilterValue : "all",
     taskMidFilterValue:
@@ -2403,6 +2448,7 @@ function initialState() {
     taskParentOrder: [],
     uiSelections: { largeTopId: "", midLargeId: "", taskParentValue: "" },
     archiveView: { top: false, large: false, parent: false },
+    taskTopFilterValue: "all",
     taskLargeFilterValue: "all",
     taskMidFilterValue: "all",
     taskTodayFilterValue: "all",
@@ -2471,6 +2517,7 @@ function mergeStates(base, incoming) {
     summaryExpanded: incoming.summaryExpanded || base.summaryExpanded,
     uiSelections: incoming.uiSelections || base.uiSelections,
     archiveView: incoming.archiveView || base.archiveView,
+    taskTopFilterValue: incoming.taskTopFilterValue || base.taskTopFilterValue,
     taskFilterStatuses: incoming.taskFilterStatuses || base.taskFilterStatuses,
     taskParentOrder: incoming.taskParentOrder || base.taskParentOrder,
     taskCollapsed: incoming.taskCollapsed || base.taskCollapsed,

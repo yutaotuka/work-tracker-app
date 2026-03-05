@@ -439,6 +439,10 @@ button:disabled {
   min-width: 260px;
 }
 
+#task-top-filter {
+  min-width: 220px;
+}
+
 #backup-export,
 #backup-import,
 #cloud-save,
@@ -1462,6 +1466,7 @@ button:disabled {
   .drag-dropdown,
   .drag-dropdown.wide,
   #cloud-endpoint,
+  #task-top-filter,
   #task-mid-filter,
   #task-large-filter,
   #manual-task-select,
