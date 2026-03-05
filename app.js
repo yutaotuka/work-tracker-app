@@ -1582,6 +1582,7 @@ function getTaskLargeFilterOptions() {
   const map = new Map();
   map.set("all", { value: "all", label: "すべて" });
   state.tasks.forEach((task) => {
+    if (isTaskInArchivedHierarchy(task)) return;
     const key = getTaskLargeFilterKey(task);
     if (!map.has(key)) {
       map.set(key, { value: key, label: getTaskLargeFilterLabel(task) });
@@ -1593,12 +1594,7 @@ function getTaskLargeFilterOptions() {
 function getTaskLargeFilterKey(task) {
   const path = resolveTaskPath(task.id);
   if (path.largeName === "(削除済み大グループ)") return "large:unknown";
-  if (task.parentType === "large" && task.largeGroupId) return `large:${task.largeGroupId}`;
-  if (task.parentType === "mid" && task.midGroupId) {
-    const mid = state.midGroups.find((m) => m.id === task.midGroupId);
-    if (mid && mid.largeGroupId) return `large:${mid.largeGroupId}`;
-  }
-  return "large:unknown";
+  return `large:${path.topName}::${path.largeName}`;
 }
 
 function getTaskLargeFilterLabel(task) {
@@ -1611,6 +1607,7 @@ function getTaskMidFilterOptions() {
   const map = new Map();
   map.set("all", { value: "all", label: "すべて" });
   state.tasks.forEach((task) => {
+    if (isTaskInArchivedHierarchy(task)) return;
     const key = getTaskMidFilterKey(task);
     if (!map.has(key)) {
       map.set(key, { value: key, label: getTaskMidFilterLabel(task) });
@@ -1620,16 +1617,32 @@ function getTaskMidFilterOptions() {
 }
 
 function getTaskMidFilterKey(task) {
-  if (task.parentType === "large") return "mid:none";
-  if (task.midGroupId) return `mid:${task.midGroupId}`;
+  const path = resolveTaskPath(task.id);
+  if (task.parentType === "large") return `mid:${path.topName}::${path.largeName}::(中グループなし)`;
+  if (task.midGroupId) return `mid:${path.topName}::${path.largeName}::${path.midName}`;
   return "mid:unknown";
 }
 
 function getTaskMidFilterLabel(task) {
   const path = resolveTaskPath(task.id);
-  if (task.parentType === "large") return "(中グループなし)";
-  if (task.midGroupId) return `${path.largeName} > ${path.midName}`;
+  if (task.parentType === "large") return `${path.topName} > ${path.largeName} > (中グループなし)`;
+  if (task.midGroupId) return `${path.topName} > ${path.largeName} > ${path.midName}`;
   return "(削除済み中グループ)";
+}
+
+function isTaskInArchivedHierarchy(task) {
+  if (!task) return false;
+  if (task.parentType === "large") {
+    const large = state.largeGroups.find((g) => g.id === task.largeGroupId);
+    if (!large) return false;
+    const top = state.topGroups.find((tg) => tg.id === large.topGroupId);
+    return Boolean(large.archived) || Boolean(top && top.archived);
+  }
+  const mid = state.midGroups.find((m) => m.id === task.midGroupId);
+  if (!mid) return false;
+  const large = state.largeGroups.find((g) => g.id === mid.largeGroupId);
+  const top = large ? state.topGroups.find((tg) => tg.id === large.topGroupId) : null;
+  return Boolean(mid.archived) || Boolean(large && large.archived) || Boolean(top && top.archived);
 }
 
 function renderManualSection() {
