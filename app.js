@@ -28,6 +28,7 @@ let syncUiLockActive = false;
 let lastLocalMutationAt = 0;
 let lastLifecycleSyncAt = 0;
 let groupEditTargetTaskId = "";
+let groupEditInitialParentValue = "";
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -97,7 +98,10 @@ const el = {
   syncModalOverlay: document.getElementById("sync-modal-overlay"),
   groupEditModalOverlay: document.getElementById("group-edit-modal-overlay"),
   groupEditTaskName: document.getElementById("group-edit-task-name"),
-  groupEditSelect: document.getElementById("group-edit-select"),
+  groupEditPathPreview: document.getElementById("group-edit-path-preview"),
+  groupEditTopSelect: document.getElementById("group-edit-top-select"),
+  groupEditLargeSelect: document.getElementById("group-edit-large-select"),
+  groupEditMidSelect: document.getElementById("group-edit-mid-select"),
   groupEditSave: document.getElementById("group-edit-save"),
   groupEditCancel: document.getElementById("group-edit-cancel"),
 };
@@ -322,6 +326,24 @@ function bindEvents() {
   }
   if (el.groupEditSave) {
     el.groupEditSave.addEventListener("click", submitTaskGroupEditModal);
+  }
+  if (el.groupEditTopSelect) {
+    el.groupEditTopSelect.addEventListener("change", () => {
+      renderGroupEditLargeOptions();
+      renderGroupEditMidOptions();
+      renderGroupEditPathPreview();
+    });
+  }
+  if (el.groupEditLargeSelect) {
+    el.groupEditLargeSelect.addEventListener("change", () => {
+      renderGroupEditMidOptions();
+      renderGroupEditPathPreview();
+    });
+  }
+  if (el.groupEditMidSelect) {
+    el.groupEditMidSelect.addEventListener("change", () => {
+      renderGroupEditPathPreview();
+    });
   }
   if (el.groupEditModalOverlay) {
     el.groupEditModalOverlay.addEventListener("click", (e) => {
@@ -1149,33 +1171,44 @@ function editTaskGroups(taskId) {
   if (!ensureSyncMutable("グループ編集")) return;
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return;
-  if (!el.groupEditModalOverlay || !el.groupEditTaskName || !el.groupEditSelect) {
+  if (
+    !el.groupEditModalOverlay ||
+    !el.groupEditTaskName ||
+    !el.groupEditTopSelect ||
+    !el.groupEditLargeSelect ||
+    !el.groupEditMidSelect
+  ) {
     alert("グループ編集UIの初期化に失敗しました。画面を再読み込みしてください。");
     return;
   }
-  const allOptions = getTaskParentOptions();
-  const currentParentValue =
-    task.parentType === "large" ? `large:${task.largeGroupId || ""}` : `mid:${task.midGroupId || ""}`;
-  const options = allOptions.filter((option) => !option.archived || option.value === currentParentValue);
-  if (!options.length) {
+  const refs = getTaskGroupRefs(task);
+  const currentTopId = refs.top ? refs.top.id : "";
+  const topOptions = state.topGroups.filter((g) => !g.archived || g.id === currentTopId);
+  if (!topOptions.length) {
     alert("選択できるグループがありません。");
     return;
   }
   groupEditTargetTaskId = task.id;
+  groupEditInitialParentValue =
+    task.parentType === "large" ? `large:${task.largeGroupId || ""}` : `mid:${task.midGroupId || ""}`;
   el.groupEditTaskName.textContent = `対象: ${task.name}`;
-  el.groupEditSelect.innerHTML = options
-    .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+  el.groupEditTopSelect.innerHTML = topOptions
+    .map((top) => `<option value="${escapeHtml(top.id)}">${escapeHtml(top.name)}</option>`)
     .join("");
-  el.groupEditSelect.value = options.some((o) => o.value === currentParentValue)
-    ? currentParentValue
-    : options[0].value;
+  el.groupEditTopSelect.value = currentTopId && topOptions.some((t) => t.id === currentTopId)
+    ? currentTopId
+    : topOptions[0].id;
+  renderGroupEditLargeOptions(refs.large ? refs.large.id : "");
+  renderGroupEditMidOptions(refs.mid ? refs.mid.id : "");
+  renderGroupEditPathPreview();
   el.groupEditModalOverlay.classList.remove("hidden");
   el.groupEditModalOverlay.setAttribute("aria-hidden", "false");
-  el.groupEditSelect.focus();
+  el.groupEditTopSelect.focus();
 }
 
 function closeTaskGroupEditModal() {
   groupEditTargetTaskId = "";
+  groupEditInitialParentValue = "";
   if (!el.groupEditModalOverlay) return;
   el.groupEditModalOverlay.classList.add("hidden");
   el.groupEditModalOverlay.setAttribute("aria-hidden", "true");
@@ -1184,14 +1217,18 @@ function closeTaskGroupEditModal() {
 function submitTaskGroupEditModal() {
   if (!ensureSyncMutable("グループ編集")) return;
   const task = state.tasks.find((t) => t.id === groupEditTargetTaskId);
-  if (!task || !el.groupEditSelect) {
+  if (!task || !el.groupEditLargeSelect || !el.groupEditMidSelect) {
     closeTaskGroupEditModal();
     return;
   }
-  const currentParentValue =
-    task.parentType === "large" ? `large:${task.largeGroupId || ""}` : `mid:${task.midGroupId || ""}`;
-  const nextValue = el.groupEditSelect.value;
-  if (!nextValue || nextValue === currentParentValue) {
+  const largeId = el.groupEditLargeSelect.value || "";
+  if (!largeId) {
+    alert("大グループを選択してください。");
+    return;
+  }
+  const midId = el.groupEditMidSelect.value || "";
+  const nextValue = midId ? `mid:${midId}` : `large:${largeId}`;
+  if (!nextValue || nextValue === groupEditInitialParentValue) {
     closeTaskGroupEditModal();
     return;
   }
@@ -1211,6 +1248,71 @@ function submitTaskGroupEditModal() {
   task.updatedAt = Date.now();
   closeTaskGroupEditModal();
   persistQuickChange();
+}
+
+function getTaskGroupRefs(task) {
+  if (!task) return { top: null, large: null, mid: null };
+  let mid = null;
+  let large = null;
+  if (task.parentType === "large") {
+    large = state.largeGroups.find((g) => g.id === task.largeGroupId) || null;
+  } else {
+    mid = state.midGroups.find((m) => m.id === task.midGroupId) || null;
+    large = mid ? state.largeGroups.find((g) => g.id === mid.largeGroupId) || null : null;
+  }
+  const top = large ? state.topGroups.find((tg) => tg.id === large.topGroupId) || null : null;
+  return { top, large, mid };
+}
+
+function renderGroupEditLargeOptions(preferredLargeId = "") {
+  if (!el.groupEditTopSelect || !el.groupEditLargeSelect) return;
+  const topId = el.groupEditTopSelect.value || "";
+  const currentTask = state.tasks.find((t) => t.id === groupEditTargetTaskId);
+  const refs = getTaskGroupRefs(currentTask);
+  const currentLargeId = refs.large ? refs.large.id : "";
+  const largeOptions = state.largeGroups.filter(
+    (g) => g.topGroupId === topId && (!g.archived || g.id === currentLargeId)
+  );
+  el.groupEditLargeSelect.innerHTML = largeOptions
+    .map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`)
+    .join("");
+  const targetId =
+    preferredLargeId && largeOptions.some((g) => g.id === preferredLargeId)
+      ? preferredLargeId
+      : largeOptions[0]?.id || "";
+  el.groupEditLargeSelect.value = targetId;
+  if (el.groupEditSave) {
+    el.groupEditSave.disabled = !targetId;
+  }
+}
+
+function renderGroupEditMidOptions(preferredMidId = "") {
+  if (!el.groupEditLargeSelect || !el.groupEditMidSelect) return;
+  const largeId = el.groupEditLargeSelect.value || "";
+  const currentTask = state.tasks.find((t) => t.id === groupEditTargetTaskId);
+  const refs = getTaskGroupRefs(currentTask);
+  const currentMidId = refs.mid ? refs.mid.id : "";
+  const midOptions = state.midGroups.filter(
+    (m) => m.largeGroupId === largeId && (!m.archived || m.id === currentMidId)
+  );
+  const rows = [
+    `<option value="">(中グループなし)</option>`,
+    ...midOptions.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`),
+  ];
+  el.groupEditMidSelect.innerHTML = rows.join("");
+  const targetId =
+    preferredMidId && midOptions.some((m) => m.id === preferredMidId) ? preferredMidId : "";
+  el.groupEditMidSelect.value = targetId;
+}
+
+function renderGroupEditPathPreview() {
+  if (!el.groupEditPathPreview || !el.groupEditTopSelect || !el.groupEditLargeSelect || !el.groupEditMidSelect) return;
+  const topName = el.groupEditTopSelect.options[el.groupEditTopSelect.selectedIndex]?.textContent || "(未選択)";
+  const largeName = el.groupEditLargeSelect.options[el.groupEditLargeSelect.selectedIndex]?.textContent || "(未選択)";
+  const midName = el.groupEditMidSelect.value
+    ? el.groupEditMidSelect.options[el.groupEditMidSelect.selectedIndex]?.textContent || "(未選択)"
+    : "(中グループなし)";
+  el.groupEditPathPreview.textContent = `変更後: ${topName} > ${largeName} > ${midName}`;
 }
 
 function addManualSession(taskId, startAt, endAt) {
