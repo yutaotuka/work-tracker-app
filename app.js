@@ -691,6 +691,7 @@ function renderTasks() {
     const compactStopBtn = node.querySelector(".stop-btn-compact");
     const todayBtn = node.querySelector(".today-btn:not(.today-btn-compact)");
     const compactTodayBtn = node.querySelector(".today-btn-compact");
+    const groupEditBtn = node.querySelector(".group-edit-btn");
     const renameBtn = node.querySelector(".rename-btn");
     const deleteBtn = node.querySelector(".delete-btn");
     const allStartButtons = [startBtn, compactStartBtn];
@@ -736,6 +737,7 @@ function renderTasks() {
         persistQuickChange();
       });
     });
+    groupEditBtn.addEventListener("click", () => editTaskGroups(task.id));
     renameBtn.addEventListener("click", () => renameTask(task.id));
     deleteBtn.addEventListener("click", () => deleteTask(task.id));
 
@@ -1122,6 +1124,46 @@ function renameTask(taskId) {
   task.name = trimmed;
   task.updatedAt = Date.now();
   persistAndRender();
+}
+
+function editTaskGroups(taskId) {
+  if (!ensureSyncMutable("グループ編集")) return;
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task) return;
+  const allOptions = getTaskParentOptions();
+  const currentParentValue =
+    task.parentType === "large" ? `large:${task.largeGroupId || ""}` : `mid:${task.midGroupId || ""}`;
+  const options = allOptions.filter((option) => !option.archived || option.value === currentParentValue);
+  if (!options.length) {
+    alert("選択できるグループがありません。");
+    return;
+  }
+  const selectedIndex = options.findIndex((option) => option.value === currentParentValue);
+  const defaultInput = selectedIndex >= 0 ? String(selectedIndex + 1) : "1";
+  const listText = options
+    .map((option, index) => `${index + 1}. ${option.label}${option.value === currentParentValue ? " (現在)" : ""}`)
+    .join("\n");
+  const input = prompt(`所属グループを番号で選択してください\n\n${listText}`, defaultInput);
+  if (input === null) return;
+  const picked = Number.parseInt(input, 10);
+  if (!Number.isFinite(picked) || picked < 1 || picked > options.length) {
+    alert("有効な番号を入力してください。");
+    return;
+  }
+  const target = options[picked - 1];
+  if (!target || target.value === currentParentValue) return;
+  const parent = parseTaskParentValue(target.value);
+  if (!parent) return;
+  task.parentType = parent.parentType;
+  if (parent.parentType === "large") {
+    task.largeGroupId = parent.largeGroupId || null;
+    task.midGroupId = null;
+  } else {
+    task.midGroupId = parent.midGroupId || null;
+    task.largeGroupId = null;
+  }
+  task.updatedAt = Date.now();
+  persistQuickChange();
 }
 
 function addManualSession(taskId, startAt, endAt) {
