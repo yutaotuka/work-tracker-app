@@ -281,6 +281,22 @@
       <div class="sync-modal-card" role="status" aria-live="polite">同期中...</div>
     </div>
 
+    <div id="group-edit-modal-overlay" class="sync-modal-overlay hidden" aria-hidden="true">
+      <div class="sync-modal-backdrop" data-group-edit-close="1"></div>
+      <section class="sync-modal-card group-edit-card" role="dialog" aria-modal="true" aria-labelledby="group-edit-title">
+        <h3 id="group-edit-title">タスクのグループ編集</h3>
+        <p id="group-edit-task-name" class="group-edit-task-name"></p>
+        <label class="task-control">
+          所属グループ
+          <select id="group-edit-select"></select>
+        </label>
+        <div class="buttons">
+          <button id="group-edit-save" type="button">保存</button>
+          <button id="group-edit-cancel" type="button" class="delete-btn">キャンセル</button>
+        </div>
+      </section>
+    </div>
+
     <script src="./app.js"></script>
   </body>
 </html>

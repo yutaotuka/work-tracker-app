@@ -27,6 +27,7 @@ let renderDebounceTimer = null;
 let syncUiLockActive = false;
 let lastLocalMutationAt = 0;
 let lastLifecycleSyncAt = 0;
+let groupEditTargetTaskId = "";
 
 const el = {
   openTimelineModal: document.getElementById("open-timeline-modal"),
@@ -94,6 +95,11 @@ const el = {
   appVersion: document.getElementById("app-version"),
   syncStatus: document.getElementById("sync-status"),
   syncModalOverlay: document.getElementById("sync-modal-overlay"),
+  groupEditModalOverlay: document.getElementById("group-edit-modal-overlay"),
+  groupEditTaskName: document.getElementById("group-edit-task-name"),
+  groupEditSelect: document.getElementById("group-edit-select"),
+  groupEditSave: document.getElementById("group-edit-save"),
+  groupEditCancel: document.getElementById("group-edit-cancel"),
 };
 
 el.cloudEndpoint.value = localStorage.getItem(CLOUD_ENDPOINT_KEY) || CLOUD_ENDPOINT_DEFAULT;
@@ -311,6 +317,19 @@ function bindEvents() {
   });
   el.cloudSave.addEventListener("click", cloudSave);
   el.cloudLoad.addEventListener("click", cloudLoad);
+  if (el.groupEditCancel) {
+    el.groupEditCancel.addEventListener("click", closeTaskGroupEditModal);
+  }
+  if (el.groupEditSave) {
+    el.groupEditSave.addEventListener("click", submitTaskGroupEditModal);
+  }
+  if (el.groupEditModalOverlay) {
+    el.groupEditModalOverlay.addEventListener("click", (e) => {
+      if (e.target?.dataset?.groupEditClose === "1") {
+        closeTaskGroupEditModal();
+      }
+    });
+  }
 
   window.addEventListener("pagehide", () => {
     persistState();
@@ -1130,6 +1149,10 @@ function editTaskGroups(taskId) {
   if (!ensureSyncMutable("グループ編集")) return;
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return;
+  if (!el.groupEditModalOverlay || !el.groupEditTaskName || !el.groupEditSelect) {
+    alert("グループ編集UIの初期化に失敗しました。画面を再読み込みしてください。");
+    return;
+  }
   const allOptions = getTaskParentOptions();
   const currentParentValue =
     task.parentType === "large" ? `large:${task.largeGroupId || ""}` : `mid:${task.midGroupId || ""}`;
@@ -1138,22 +1161,45 @@ function editTaskGroups(taskId) {
     alert("選択できるグループがありません。");
     return;
   }
-  const selectedIndex = options.findIndex((option) => option.value === currentParentValue);
-  const defaultInput = selectedIndex >= 0 ? String(selectedIndex + 1) : "1";
-  const listText = options
-    .map((option, index) => `${index + 1}. ${option.label}${option.value === currentParentValue ? " (現在)" : ""}`)
-    .join("\n");
-  const input = prompt(`所属グループを番号で選択してください\n\n${listText}`, defaultInput);
-  if (input === null) return;
-  const picked = Number.parseInt(input, 10);
-  if (!Number.isFinite(picked) || picked < 1 || picked > options.length) {
-    alert("有効な番号を入力してください。");
+  groupEditTargetTaskId = task.id;
+  el.groupEditTaskName.textContent = `対象: ${task.name}`;
+  el.groupEditSelect.innerHTML = options
+    .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+    .join("");
+  el.groupEditSelect.value = options.some((o) => o.value === currentParentValue)
+    ? currentParentValue
+    : options[0].value;
+  el.groupEditModalOverlay.classList.remove("hidden");
+  el.groupEditModalOverlay.setAttribute("aria-hidden", "false");
+  el.groupEditSelect.focus();
+}
+
+function closeTaskGroupEditModal() {
+  groupEditTargetTaskId = "";
+  if (!el.groupEditModalOverlay) return;
+  el.groupEditModalOverlay.classList.add("hidden");
+  el.groupEditModalOverlay.setAttribute("aria-hidden", "true");
+}
+
+function submitTaskGroupEditModal() {
+  if (!ensureSyncMutable("グループ編集")) return;
+  const task = state.tasks.find((t) => t.id === groupEditTargetTaskId);
+  if (!task || !el.groupEditSelect) {
+    closeTaskGroupEditModal();
     return;
   }
-  const target = options[picked - 1];
-  if (!target || target.value === currentParentValue) return;
-  const parent = parseTaskParentValue(target.value);
-  if (!parent) return;
+  const currentParentValue =
+    task.parentType === "large" ? `large:${task.largeGroupId || ""}` : `mid:${task.midGroupId || ""}`;
+  const nextValue = el.groupEditSelect.value;
+  if (!nextValue || nextValue === currentParentValue) {
+    closeTaskGroupEditModal();
+    return;
+  }
+  const parent = parseTaskParentValue(nextValue);
+  if (!parent) {
+    alert("選択したグループが不正です。");
+    return;
+  }
   task.parentType = parent.parentType;
   if (parent.parentType === "large") {
     task.largeGroupId = parent.largeGroupId || null;
@@ -1163,6 +1209,7 @@ function editTaskGroups(taskId) {
     task.largeGroupId = null;
   }
   task.updatedAt = Date.now();
+  closeTaskGroupEditModal();
   persistQuickChange();
 }
 
