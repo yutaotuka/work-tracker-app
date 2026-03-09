@@ -974,6 +974,13 @@ button:disabled {
   justify-content: flex-end;
 }
 
+.summary-filter-row {
+  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
 #summary-prev,
 #summary-next,
 #summary-reset {
@@ -1570,6 +1577,10 @@ button:disabled {
 
   .summary-meta {
     justify-content: flex-start;
+  }
+
+  .summary-filter-row {
+    grid-template-columns: 1fr;
   }
 
   .stack-on-mobile {

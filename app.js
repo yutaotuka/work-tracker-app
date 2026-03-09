@@ -88,6 +88,9 @@ const el = {
   summaryTabs: document.getElementById("summary-tabs"),
   summaryPeriod: document.getElementById("summary-period"),
   summaryTotal: document.getElementById("summary-total"),
+  summaryTopFilter: document.getElementById("summary-top-filter"),
+  summaryLargeFilter: document.getElementById("summary-large-filter"),
+  summaryMidFilter: document.getElementById("summary-mid-filter"),
   summaryTask: document.getElementById("summary-task"),
   summaryMid: document.getElementById("summary-mid"),
   summaryLarge: document.getElementById("summary-large"),
@@ -300,6 +303,21 @@ function bindEvents() {
   el.summaryReset.addEventListener("click", () => {
     const range = el.rangeSelect.value;
     state.summaryOffsets[range] = 0;
+    persistUiAndRender();
+  });
+  el.summaryTopFilter.addEventListener("change", () => {
+    state.summaryTopFilterValue = el.summaryTopFilter.value;
+    state.summaryLargeFilterValue = "all";
+    state.summaryMidFilterValue = "all";
+    persistUiAndRender();
+  });
+  el.summaryLargeFilter.addEventListener("change", () => {
+    state.summaryLargeFilterValue = el.summaryLargeFilter.value;
+    state.summaryMidFilterValue = "all";
+    persistUiAndRender();
+  });
+  el.summaryMidFilter.addEventListener("change", () => {
+    state.summaryMidFilterValue = el.summaryMidFilter.value;
     persistUiAndRender();
   });
 
@@ -901,9 +919,20 @@ function renderSummary() {
   const start = bounds.start;
   const end = Math.min(bounds.end, now);
 
-  const sessions = materializeSessions(now).filter(
+  const sessionsInRange = materializeSessions(now).filter(
     (s) => s.endAt > start && s.startAt < end
   );
+  renderSummaryFilters(sessionsInRange);
+
+  const selectedTop = state.summaryTopFilterValue || "all";
+  const selectedLarge = state.summaryLargeFilterValue || "all";
+  const selectedMid = state.summaryMidFilterValue || "all";
+  const sessions = sessionsInRange.filter((s) => {
+    if (selectedTop !== "all" && s.topName !== selectedTop) return false;
+    if (selectedLarge !== "all" && s.largeName !== selectedLarge) return false;
+    if (selectedMid !== "all" && s.midName !== selectedMid) return false;
+    return true;
+  });
 
   const taskMap = new Map();
   const midMap = new Map();
@@ -935,6 +964,49 @@ function renderSummary() {
   renderList(el.summaryLarge, largeMap, totalMs, "large");
   renderList(el.summaryTop, topMap, totalMs, "top");
   renderList(el.summaryTags, tagMap, totalMs, "tags");
+}
+
+function renderSummaryFilters(sessionsInRange) {
+  const topOptions = getSummaryFilterOptions(
+    sessionsInRange.map((s) => s.topName),
+    "all",
+    "すべて"
+  );
+  state.summaryTopFilterValue = ensureSelection(state.summaryTopFilterValue, topOptions);
+  el.summaryTopFilter.innerHTML = topOptions
+    .map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
+    .join("");
+  el.summaryTopFilter.value = state.summaryTopFilterValue;
+
+  const largeSource = sessionsInRange
+    .filter((s) => state.summaryTopFilterValue === "all" || s.topName === state.summaryTopFilterValue)
+    .map((s) => s.largeName);
+  const largeOptions = getSummaryFilterOptions(largeSource, "all", "すべて");
+  state.summaryLargeFilterValue = ensureSelection(state.summaryLargeFilterValue, largeOptions);
+  el.summaryLargeFilter.innerHTML = largeOptions
+    .map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
+    .join("");
+  el.summaryLargeFilter.value = state.summaryLargeFilterValue;
+
+  const midSource = sessionsInRange
+    .filter((s) => {
+      if (state.summaryTopFilterValue !== "all" && s.topName !== state.summaryTopFilterValue) return false;
+      if (state.summaryLargeFilterValue !== "all" && s.largeName !== state.summaryLargeFilterValue) return false;
+      return true;
+    })
+    .map((s) => s.midName);
+  const midOptions = getSummaryFilterOptions(midSource, "all", "すべて");
+  state.summaryMidFilterValue = ensureSelection(state.summaryMidFilterValue, midOptions);
+  el.summaryMidFilter.innerHTML = midOptions
+    .map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`)
+    .join("");
+  el.summaryMidFilter.value = state.summaryMidFilterValue;
+}
+
+function getSummaryFilterOptions(values, allValue = "all", allLabel = "すべて") {
+  const unique = [...new Set(values.filter((v) => typeof v === "string" && v.trim()))];
+  unique.sort((a, b) => a.localeCompare(b, "ja"));
+  return [{ value: allValue, label: allLabel }, ...unique.map((name) => ({ value: name, label: name }))];
 }
 
 function renderSummaryTabs() {
@@ -2559,6 +2631,12 @@ function migrateState(parsed) {
     summaryTab: normalizeSummaryTab(parsed.summaryTab),
     summaryOffsets: normalizeSummaryOffsets(parsed.summaryOffsets),
     summaryExpanded: normalizeSummaryExpanded(parsed.summaryExpanded),
+    summaryTopFilterValue:
+      typeof parsed.summaryTopFilterValue === "string" ? parsed.summaryTopFilterValue : "all",
+    summaryLargeFilterValue:
+      typeof parsed.summaryLargeFilterValue === "string" ? parsed.summaryLargeFilterValue : "all",
+    summaryMidFilterValue:
+      typeof parsed.summaryMidFilterValue === "string" ? parsed.summaryMidFilterValue : "all",
     taskParentOrder: Array.isArray(parsed.taskParentOrder) ? parsed.taskParentOrder : [],
     uiSelections: normalizeUiSelections(parsed.uiSelections),
     archiveView: normalizeArchiveView(parsed.archiveView),
@@ -2636,6 +2714,9 @@ function initialState() {
     summaryTab: "task",
     summaryOffsets: { day: 0, week: 0, month: 0 },
     summaryExpanded: { task: false, mid: false, large: false, top: false, tags: false },
+    summaryTopFilterValue: "all",
+    summaryLargeFilterValue: "all",
+    summaryMidFilterValue: "all",
     taskParentOrder: [],
     uiSelections: { largeTopId: "", midLargeId: "", taskParentValue: "" },
     archiveView: { top: false, large: false, parent: false },
@@ -2706,6 +2787,9 @@ function mergeStates(base, incoming) {
     activeSession: mergedActiveSession || null,
     summaryOffsets: incoming.summaryOffsets || base.summaryOffsets,
     summaryExpanded: incoming.summaryExpanded || base.summaryExpanded,
+    summaryTopFilterValue: incoming.summaryTopFilterValue || base.summaryTopFilterValue,
+    summaryLargeFilterValue: incoming.summaryLargeFilterValue || base.summaryLargeFilterValue,
+    summaryMidFilterValue: incoming.summaryMidFilterValue || base.summaryMidFilterValue,
     uiSelections: incoming.uiSelections || base.uiSelections,
     archiveView: incoming.archiveView || base.archiveView,
     taskTopFilterValue: incoming.taskTopFilterValue || base.taskTopFilterValue,
