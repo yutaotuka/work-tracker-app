@@ -922,7 +922,9 @@ function renderSummary() {
   const sessionsInRange = materializeSessions(now).filter(
     (s) => s.endAt > start && s.startAt < end
   );
-  renderSummaryFilters(sessionsInRange);
+  if (!isSummaryFilterFocused()) {
+    renderSummaryFilters(sessionsInRange);
+  }
 
   const selectedTop = state.summaryTopFilterValue || "all";
   const selectedLarge = state.summaryLargeFilterValue || "all";
@@ -1007,6 +1009,15 @@ function getSummaryFilterOptions(values, allValue = "all", allLabel = "すべて
   const unique = [...new Set(values.filter((v) => typeof v === "string" && v.trim()))];
   unique.sort((a, b) => a.localeCompare(b, "ja"));
   return [{ value: allValue, label: allLabel }, ...unique.map((name) => ({ value: name, label: name }))];
+}
+
+function isSummaryFilterFocused() {
+  const active = document.activeElement;
+  return (
+    active === el.summaryTopFilter ||
+    active === el.summaryLargeFilter ||
+    active === el.summaryMidFilter
+  );
 }
 
 function renderSummaryTabs() {
