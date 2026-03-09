@@ -1420,6 +1420,14 @@ button:disabled {
   user-select: text;
 }
 
+.summary-item-name-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .summary-item-name {
   flex: 1 1 auto;
   min-width: 0;
@@ -1440,6 +1448,21 @@ button:disabled {
   font-weight: 700;
   white-space: nowrap;
   user-select: text;
+}
+
+.summary-copy-btn {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid #c9d8ea;
+  background: #fff;
+  color: #334155;
+}
+
+.summary-copy-btn:hover {
+  background: #eef4fb;
 }
 
 .summary-item-name:focus {

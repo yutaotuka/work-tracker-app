@@ -1047,7 +1047,10 @@ function renderList(container, map, totalMs, sectionKey) {
       const barRate = (ms / maxMs) * 100;
       return `<li>
         <div class="summary-item-head">
-          <input class="summary-item-name" type="text" readonly value="${escapeHtml(name)}" />
+          <div class="summary-item-name-wrap">
+            <input class="summary-item-name" type="text" readonly value="${escapeHtml(name)}" />
+            <button type="button" class="summary-copy-btn" data-copy="${escapeHtml(name)}" title="コピー">コピー</button>
+          </div>
           <span class="summary-item-value">${formatDuration(ms)}</span>
         </div>
         <div class="summary-bar"><div class="summary-bar-fill" style="width:${barRate.toFixed(1)}%"></div></div>
@@ -1068,6 +1071,45 @@ function renderList(container, map, totalMs, sectionKey) {
       state.summaryExpanded[sectionKey] = !Boolean(state.summaryExpanded[sectionKey]);
       persistUiAndRender();
     });
+  }
+  container.querySelectorAll(".summary-copy-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.dataset.copy || "";
+      if (!text) return;
+      const copied = await copyToClipboard(text);
+      const prevText = btn.textContent;
+      btn.textContent = copied ? "コピー済み" : "失敗";
+      setTimeout(() => {
+        btn.textContent = prevText;
+      }, 900);
+    });
+  });
+}
+
+async function copyToClipboard(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall back below
+  }
+
+  try {
+    const temp = document.createElement("textarea");
+    temp.value = text;
+    temp.setAttribute("readonly", "true");
+    temp.style.position = "fixed";
+    temp.style.left = "-9999px";
+    document.body.appendChild(temp);
+    temp.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(temp);
+    return Boolean(ok);
+  } catch {
+    return false;
   }
 }
 
